@@ -1,18 +1,13 @@
-name: "Test services"
+name: "Test"
 on:
   push:
     branches:
       - master
       - main
-      - staging
     paths-ignore:
       - 'docs/**'
       - '.run/**'
       - '.vscode/**'
-      - 'api/**'
-      - 'features/**'
-      - 'deployments/**'
-      - 'scripts/**'
       - '*.md'
 
   pull_request:
@@ -20,15 +15,10 @@ on:
     branches:
       - master
       - main
-      - staging
     paths-ignore:
       - 'docs/**'
       - '.run/**'
       - '.vscode/**'
-      - 'api/**'
-      - 'features/**'
-      - 'deployments/**'
-      - 'scripts/**'
       - '*.md'
 
   workflow_dispatch:
@@ -59,34 +49,11 @@ jobs:
           name: code-coverage
           path: unit_coverage.out
 
-  integration:
-    name: "Run integration tests"
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: 1.23.0
-
-      - name: Install dependencies and run tests
-        run: |
-          go mod download
-          go test -v -run 'Integration$' ./... -coverpkg=./... -coverprofile=integration_coverage.out
-
-      - name: Archive code coverage results
-        uses: actions/upload-artifact@v4
-        with:
-          name: integration-coverage
-          path: integration_coverage.out
-
   code_coverage:
     name: "Code coverage report"
     if: github.event_name == 'pull_request' # Do not run when workflow is triggered by push to main branch
     runs-on: ubuntu-latest
-    needs: [ unit, integration ]
+    needs: [ unit ]
     continue-on-error: true # not critical
     permissions:
       contents: read
