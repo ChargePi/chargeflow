@@ -1,0 +1,49 @@
+version: "2"
+linters:
+  default: all
+  enable:
+    - bidichk
+    - bodyclose
+    - canonicalheader
+    - containedctx
+    - contextcheck
+    - copyloopvar
+    - cyclop
+    - decorder
+    - depguard
+    - errcheck
+    - errname
+    - forbidigo
+    - goconst
+    - gocritic
+    - gosec
+    - govet
+    - ineffassign
+    - intrange
+    - misspell
+    - nestif
+    - nlreturn
+    - noctx
+    - nonamedreturns
+    - perfsprint
+    - prealloc
+    - predeclared
+    - protogetter
+    - spancheck
+    - staticcheck
+    - testifylint
+    - thelper
+    - unconvert
+    - unparam
+    - unused
+    - wastedassign
+    - whitespace
+    - wrapcheck
+  exclusions:
+    generated: lax
+formatters:
+  enable:
+    - gci
+    - gofmt
+    - gofumpt
+    - goimports
