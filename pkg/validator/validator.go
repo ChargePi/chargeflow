@@ -1,0 +1,97 @@
+package validator
+
+import (
+	"github.com/ChargePi/chargeflow/pkg/ocpp"
+	"github.com/ChargePi/chargeflow/pkg/parser"
+	"github.com/ChargePi/chargeflow/pkg/schema_registry"
+	"github.com/pkg/errors"
+)
+
+type Validator struct {
+	registry *schema_registry.SchemaRegistry
+}
+
+func NewValidator(registry *schema_registry.SchemaRegistry) *Validator {
+	return &Validator{
+		registry: registry,
+	}
+}
+
+// ValidateMessage validates the message. It checks if the message has an action, a payload, and a unique ID.
+// It also validates the payload against the schema for the given action and OCPP version.
+func (v *Validator) ValidateMessage(ocppVersion ocpp.Version, message parser.Message) error {
+	// Check if a message has a unique ID
+	uniqueId := message.GetUniqueId()
+	if uniqueId == "" {
+		// todo Report a validation error
+	}
+
+	// Check if a message has a payload
+	payload := message.GetPayload()
+
+	switch message.GetMessageTypeId() {
+	case parser.CALL:
+		// Check if a message has an action
+		action := message.GetAction()
+		if action == "" {
+			return errors.Errorf("message action is empty for OCPP version %s", ocppVersion)
+		}
+
+		if payload == nil {
+			return errors.Errorf("message payload is nil for action %s in OCPP version %s", action, ocppVersion)
+		}
+
+		// For CALL messages, the action must end with "Request"
+		action = action + "Request"
+
+		err := v.validatePayload(ocppVersion, payload, action)
+		if err != nil {
+			return err
+		}
+
+	case parser.CALL_RESULT:
+		// Check if a message has an action
+		action := message.GetAction()
+		if action == "" {
+			return errors.Errorf("message action is empty for OCPP version %s", ocppVersion)
+		}
+
+		// Todo try the brute force approach
+		// Getting through all the schemas and checking if it matches one of them
+		// Another approach would be to validate against a matching UniqueId action
+
+		// For CALL_RESULT messages, the action must end with "Response"
+		action = action + "Response"
+
+		err := v.validatePayload(ocppVersion, payload, action)
+		if err != nil {
+			return err
+		}
+
+	case parser.CALL_ERROR:
+		// Errors are not validated against schemas, so we skip validation for CALL_ERROR messages
+		// We will however validate the contents of the error message
+		if payload != nil {
+			callError := message.(parser.CallError)
+		}
+	}
+
+	return nil
+}
+
+func (v *Validator) validatePayload(ocppVersion ocpp.Version, payload interface{}, action string) error {
+	// Get the schema for the action and OCPP version
+	schema, found := v.registry.GetSchema(ocppVersion, action)
+	if !found {
+		return errors.Errorf("no schema found for action %s in OCPP version %s", action, ocppVersion)
+	}
+
+	// Validate the payload against the schema
+	evaluationResult := schema.Validate(payload)
+	if !evaluationResult.IsValid() {
+		// todo
+		// return errors.Wrapf(evaluationResult.Error(), "payload validation failed for action %s in OCPP version %s", action, ocppVersion)
+	}
+
+	return nil
+}
