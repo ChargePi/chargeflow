@@ -88,9 +88,19 @@ var validate = &cobra.Command{
 			return err
 		}
 
-		err = validator.ValidateMessage(ocpp.Version(ocppVersion), parseMessage)
+		result, err := validator.ValidateMessage(ocpp.Version(ocppVersion), parseMessage)
 		if err != nil {
 			return err
+		}
+
+		if result.IsValid() {
+			println("✅ Success: The message is valid according to the OCPP schema.")
+		} else {
+			println("❌ Failure: The message is NOT valid according to the OCPP schema.")
+			println("Validation errors:")
+			for _, err := range result.Errors() {
+				println("- " + err)
+			}
 		}
 
 		return nil

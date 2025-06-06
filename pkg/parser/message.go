@@ -68,7 +68,7 @@ func (callResult *CallResult) GetUniqueId() string {
 }
 
 func (callResult *CallResult) GetAction() string {
-	return callResult.Action
+	return ""
 }
 
 func (callResult *CallResult) GetPayload() interface{} {
