@@ -90,6 +90,7 @@ func (p *Parser) parse(arr []interface{}, result *Result) (Message, error) {
 		return &callResult, nil
 	case CALL_ERROR:
 		p.logger.Debug("Message is of Error response type")
+
 		if len(arr) < 4 {
 			result.AddError("Invalid Call Error message. Expected array length >= 4, got " + fmt.Sprintf("%d", len(arr)))
 			return nil, errors.Errorf("Invalid Call Error message. Expected array length >= 4, got %v", arr[2])

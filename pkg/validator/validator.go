@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"fmt"
 	"github.com/ChargePi/chargeflow/pkg/ocpp"
 	"github.com/ChargePi/chargeflow/pkg/parser"
 	"github.com/ChargePi/chargeflow/pkg/schema_registry"
@@ -84,8 +85,14 @@ func (v *Validator) ValidateMessage(ocppVersion ocpp.Version, message parser.Mes
 	case parser.CALL_ERROR:
 		// errors are not validated against schemas, so we skip validation for CALL_ERROR messages
 		// We will however validate the contents of the error message
-		if payload != nil {
-			callError := message.(parser.CallError)
+		callError, ok := message.(*parser.CallError)
+		if !ok {
+			return result, errors.New("message is not a CallError")
+		}
+
+		// Validate the error code
+		if !parser.IsErrorCodeValid(callError.ErrorCode) {
+			result.AddError(fmt.Sprintf("invalid error code: %s", callError.ErrorCode))
 		}
 	}
 

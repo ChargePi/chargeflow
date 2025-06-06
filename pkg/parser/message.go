@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/ChargePi/chargeflow/pkg/ocpp"
-	"github.com/go-playground/validator/v10"
 )
 
 // MessageType identifies the type of message exchanged between two OCPP endpoints.
@@ -79,7 +78,6 @@ func (callResult *CallResult) GetPayload() interface{} {
 
 // An OCPP-J CallError message, containing an OCPP Error.
 type CallError struct {
-	Message
 	MessageTypeId    MessageType `json:"messageTypeId" validate:"required,eq=4"`
 	UniqueId         string      `json:"uniqueId" validate:"required,max=36"`
 	ErrorCode        ErrorCode   `json:"errorCode" validate:"errorCode"`
@@ -93,6 +91,14 @@ func (callError *CallError) GetMessageTypeId() MessageType {
 
 func (callError *CallError) GetUniqueId() string {
 	return callError.UniqueId
+}
+
+func (callError *CallError) GetPayload() interface{} {
+	return callError.ErrorDetails
+}
+
+func (callError *CallError) GetAction() string {
+	return string(callError.ErrorCode)
 }
 
 type ErrorCode string
@@ -135,8 +141,7 @@ func OccurrenceConstraintErrorType(version ocpp.Version) ErrorCode {
 	}
 }
 
-func IsErrorCodeValid(fl validator.FieldLevel) bool {
-	code := ErrorCode(fl.Field().String())
+func IsErrorCodeValid(code ErrorCode) bool {
 	switch code {
 	case NotImplemented, NotSupported, InternalError, MessageTypeNotSupported,
 		ProtocolError, SecurityError, FormatViolationV16,
