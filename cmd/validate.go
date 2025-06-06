@@ -85,10 +85,21 @@ var validate = &cobra.Command{
 		ocppVersion := args[0]
 		message := args[1] // The message is expected to be a JSON string
 
-		parseMessage, err := messageParser.ParseMessage(message)
+		parseMessage, parseResult, err := messageParser.ParseMessage(message)
 		if err != nil {
 			return err
 		}
+
+		if !parseResult.IsValid() {
+			logger.Info("❌ Failure: The message could not be parsed or had syntax errors:")
+			for _, err := range parseResult.Errors() {
+				logger.Info("- " + err)
+			}
+
+			return nil
+		}
+
+		logger.Info("✅ Message successfully parsed. Proceeding with validation.")
 
 		result, err := validator.ValidateMessage(ocpp.Version(ocppVersion), parseMessage)
 		if err != nil {
@@ -96,12 +107,11 @@ var validate = &cobra.Command{
 		}
 
 		if result.IsValid() {
-			println("✅ Success: The message is valid according to the OCPP schema.")
+			logger.Info("✅ Success: The message is valid according to the OCPP schema.")
 		} else {
-			println("❌ Failure: The message is NOT valid according to the OCPP schema.")
-			println("Validation errors:")
+			logger.Info("❌ Failure: The message is NOT valid according to the OCPP schema:")
 			for _, err := range result.Errors() {
-				println("- " + err)
+				logger.Info("- " + err)
 			}
 		}
 
