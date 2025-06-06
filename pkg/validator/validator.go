@@ -5,14 +5,17 @@ import (
 	"github.com/ChargePi/chargeflow/pkg/parser"
 	"github.com/ChargePi/chargeflow/pkg/schema_registry"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 )
 
 type Validator struct {
+	logger   *zap.Logger
 	registry *schema_registry.SchemaRegistry
 }
 
-func NewValidator(registry *schema_registry.SchemaRegistry) *Validator {
+func NewValidator(logger *zap.Logger, registry *schema_registry.SchemaRegistry) *Validator {
 	return &Validator{
+		logger:   logger.Named("validator"),
 		registry: registry,
 	}
 }
@@ -20,6 +23,7 @@ func NewValidator(registry *schema_registry.SchemaRegistry) *Validator {
 // ValidateMessage validates the message. It checks if the message has an action, a payload, and a unique ID.
 // It also validates the payload against the schema for the given action and OCPP version.
 func (v *Validator) ValidateMessage(ocppVersion ocpp.Version, message parser.Message) (*ValidationResult, error) {
+	v.logger.Info("")
 	result := NewValidationResult()
 
 	// Check if a message has a unique ID

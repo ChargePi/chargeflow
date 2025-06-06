@@ -2,6 +2,7 @@ package schema_registry
 
 import (
 	"encoding/json"
+	"go.uber.org/zap"
 	"strings"
 	"sync"
 
@@ -13,14 +14,16 @@ import (
 var compiler = jsonschema.NewCompiler()
 
 type SchemaRegistry struct {
-	mu sync.RWMutex // Protects concurrent access to schemasPerOcppVersion map
+	logger *zap.Logger
+	mu     sync.RWMutex // Protects concurrent access to schemasPerOcppVersion map
 
 	// Map of schema compilers registered per OCPP version
 	schemasPerOcppVersion map[ocpp.Version]map[string]*jsonschema.Schema
 }
 
-func NewSchemaRegistry() *SchemaRegistry {
+func NewSchemaRegistry(logger *zap.Logger) *SchemaRegistry {
 	return &SchemaRegistry{
+		logger:                logger.Named("schema_registry"),
 		schemasPerOcppVersion: make(map[ocpp.Version]map[string]*jsonschema.Schema),
 	}
 }
@@ -33,6 +36,9 @@ func NewSchemaRegistry() *SchemaRegistry {
 // The rawSchema should be a valid JSON schema in raw format.
 // The action is the name of the OCPP action that this schema applies to. Must be suffixed with either "Request" or "Response".
 func (sr *SchemaRegistry) RegisterSchema(ocppVersion ocpp.Version, action string, rawSchema json.RawMessage, opts ...Option) error {
+	logger := sr.logger.With(zap.String("ocppVersion", ocppVersion.String()), zap.String("action", action))
+	logger.Info("Registering schema")
+
 	// Validate the OCPP version
 	if !ocpp.IsValidProtocolVersion(ocppVersion) {
 		return errors.Errorf("invalid OCPP version: %s", ocppVersion)
@@ -43,6 +49,7 @@ func (sr *SchemaRegistry) RegisterSchema(ocppVersion ocpp.Version, action string
 		return errors.Errorf("action must end with 'Request' or 'Response': %s", action)
 	}
 
+	logger.Debug("Compiling schema")
 	// Compile the schema using the jsonschema compiler
 	schema, err := compiler.Compile(rawSchema)
 	if err != nil {
@@ -66,6 +73,7 @@ func (sr *SchemaRegistry) RegisterSchema(ocppVersion ocpp.Version, action string
 	}
 
 	if !defaultOpts.overwrite {
+		logger.Debug("Schema registry overwrite")
 		// Check if the schema already exists for the given action
 		if _, exists := sr.schemasPerOcppVersion[ocppVersion][action]; exists {
 			return errors.Errorf("schema for action %s already exists for OCPP version %s", action, ocppVersion)
@@ -80,6 +88,8 @@ func (sr *SchemaRegistry) RegisterSchema(ocppVersion ocpp.Version, action string
 
 // GetSchema retrieves a schema for a specific OCPP version and action.
 func (sr *SchemaRegistry) GetSchema(ocppVersion ocpp.Version, action string) (*jsonschema.Schema, bool) {
+	sr.logger.Info("Getting schema", zap.String("ocppVersion", ocppVersion.String()), zap.String("action", action))
+
 	sr.mu.RLock()
 	defer sr.mu.RUnlock()
 

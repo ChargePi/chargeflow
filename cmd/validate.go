@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"embed"
+	"go.uber.org/zap"
 
 	"github.com/ChargePi/chargeflow/pkg/ocpp"
 	"github.com/ChargePi/chargeflow/pkg/parser"
@@ -11,9 +12,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var registry = schema_registry.NewSchemaRegistry()
+var registry = schema_registry.NewSchemaRegistry(zap.L())
 
-var messageParser = parser.NewParser()
+var messageParser = parser.NewParser(zap.L())
 
 // OCPP 1.6 schemas
 //
@@ -78,7 +79,8 @@ var validate = &cobra.Command{
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		validator := validator.NewValidator(registry)
+		logger := zap.L()
+		validator := validator.NewValidator(logger, registry)
 
 		ocppVersion := args[0]
 		message := args[1] // The message is expected to be a JSON string
