@@ -1,0 +1,4 @@
+.PHONY:gen
+
+gen:
+	mockery
