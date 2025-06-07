@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"context"
-
+	"github.com/ChargePi/chargeflow/pkg/ocpp"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
@@ -13,6 +13,8 @@ const (
 )
 
 var (
+	defaultOcppVersion = ocpp.V16.String()
+
 	configurationFile string
 
 	rootCmd = &cobra.Command{
@@ -43,12 +45,8 @@ func rootFlags() {
 		"Path to the configuration file",
 	)
 
-	rootCmd.Flags().BoolP(
-		"version",
-		"v",
-		false,
-		"Print the version of the service",
-	)
+	// Add flag for OCPP version
+	rootCmd.Flags().StringVarP(&defaultOcppVersion, "version", "v", ocpp.V16.String(), "OCPP version to use (1.6 or 2.0.1)")
 }
 
 func Execute(ctx context.Context) error {
