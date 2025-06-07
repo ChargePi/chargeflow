@@ -13,7 +13,12 @@ import (
 
 var compiler = jsonschema.NewCompiler()
 
-type SchemaRegistry struct {
+type SchemaRegistry interface {
+	RegisterSchema(ocppVersion ocpp.Version, action string, rawSchema json.RawMessage, opts ...Option) error
+	GetSchema(ocppVersion ocpp.Version, action string) (*jsonschema.Schema, bool)
+}
+
+type InMemorySchemaRegistry struct {
 	logger *zap.Logger
 	mu     sync.RWMutex // Protects concurrent access to schemasPerOcppVersion map
 
@@ -21,8 +26,8 @@ type SchemaRegistry struct {
 	schemasPerOcppVersion map[ocpp.Version]map[string]*jsonschema.Schema
 }
 
-func NewSchemaRegistry(logger *zap.Logger) *SchemaRegistry {
-	return &SchemaRegistry{
+func NewInMemorySchemaRegistry(logger *zap.Logger) *InMemorySchemaRegistry {
+	return &InMemorySchemaRegistry{
 		logger:                logger.Named("schema_registry"),
 		schemasPerOcppVersion: make(map[ocpp.Version]map[string]*jsonschema.Schema),
 	}
@@ -35,8 +40,8 @@ func NewSchemaRegistry(logger *zap.Logger) *SchemaRegistry {
 //
 // The rawSchema should be a valid JSON schema in raw format.
 // The action is the name of the OCPP action that this schema applies to. Must be suffixed with either "Request" or "Response".
-func (sr *SchemaRegistry) RegisterSchema(ocppVersion ocpp.Version, action string, rawSchema json.RawMessage, opts ...Option) error {
-	logger := sr.logger.With(zap.String("ocppVersion", ocppVersion.String()), zap.String("action", action))
+func (fsr *InMemorySchemaRegistry) RegisterSchema(ocppVersion ocpp.Version, action string, rawSchema json.RawMessage, opts ...Option) error {
+	logger := fsr.logger.With(zap.String("ocppVersion", ocppVersion.String()), zap.String("action", action))
 	logger.Info("Registering schema")
 
 	// Validate the OCPP version
@@ -65,36 +70,36 @@ func (sr *SchemaRegistry) RegisterSchema(ocppVersion ocpp.Version, action string
 	}
 
 	// Acquire write lock to modify the schemasPerOcppVersion map
-	sr.mu.RLock()
-	defer sr.mu.RUnlock()
+	fsr.mu.RLock()
+	defer fsr.mu.RUnlock()
 
-	if _, exists := sr.schemasPerOcppVersion[ocppVersion]; !exists {
-		sr.schemasPerOcppVersion[ocppVersion] = make(map[string]*jsonschema.Schema)
+	if _, exists := fsr.schemasPerOcppVersion[ocppVersion]; !exists {
+		fsr.schemasPerOcppVersion[ocppVersion] = make(map[string]*jsonschema.Schema)
 	}
 
 	if !defaultOpts.overwrite {
 		logger.Debug("Schema registry overwrite")
 		// Check if the schema already exists for the given action
-		if _, exists := sr.schemasPerOcppVersion[ocppVersion][action]; exists {
+		if _, exists := fsr.schemasPerOcppVersion[ocppVersion][action]; exists {
 			return errors.Errorf("schema for action %s already exists for OCPP version %s", action, ocppVersion)
 		}
 	}
 
 	// Register the schema for the specific action
-	sr.schemasPerOcppVersion[ocppVersion][action] = schema
+	fsr.schemasPerOcppVersion[ocppVersion][action] = schema
 
 	return nil
 }
 
 // GetSchema retrieves a schema for a specific OCPP version and action.
-func (sr *SchemaRegistry) GetSchema(ocppVersion ocpp.Version, action string) (*jsonschema.Schema, bool) {
-	sr.logger.Info("Getting schema", zap.String("ocppVersion", ocppVersion.String()), zap.String("action", action))
+func (fsr *InMemorySchemaRegistry) GetSchema(ocppVersion ocpp.Version, action string) (*jsonschema.Schema, bool) {
+	fsr.logger.Info("Getting schema", zap.String("ocppVersion", ocppVersion.String()), zap.String("action", action))
 
-	sr.mu.RLock()
-	defer sr.mu.RUnlock()
+	fsr.mu.RLock()
+	defer fsr.mu.RUnlock()
 
 	// Check if the OCPP version exists in the registry
-	if schemas, exists := sr.schemasPerOcppVersion[ocppVersion]; exists {
+	if schemas, exists := fsr.schemasPerOcppVersion[ocppVersion]; exists {
 		// Check if the action exists for the given OCPP version
 		if schema, exists := schemas[action]; exists {
 			return schema, true

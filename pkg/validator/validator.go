@@ -11,10 +11,10 @@ import (
 
 type Validator struct {
 	logger   *zap.Logger
-	registry *schema_registry.SchemaRegistry
+	registry schema_registry.SchemaRegistry
 }
 
-func NewValidator(logger *zap.Logger, registry *schema_registry.SchemaRegistry) *Validator {
+func NewValidator(logger *zap.Logger, registry schema_registry.SchemaRegistry) *Validator {
 	return &Validator{
 		logger:   logger.Named("validator"),
 		registry: registry,
