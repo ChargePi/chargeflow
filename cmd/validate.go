@@ -2,14 +2,14 @@ package cmd
 
 import (
 	"embed"
-	"go.uber.org/zap"
-
 	"github.com/ChargePi/chargeflow/pkg/ocpp"
 	"github.com/ChargePi/chargeflow/pkg/parser"
 	"github.com/ChargePi/chargeflow/pkg/schema_registry"
 	"github.com/ChargePi/chargeflow/pkg/validator"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	"go.uber.org/zap"
+	"os"
 )
 
 var registry = schema_registry.NewSchemaRegistry(zap.L())
@@ -23,6 +23,8 @@ var ocpp16Schemas embed.FS
 
 //go:embed ../schemas/ocpp_201/*.json
 var ocpp201Schemas embed.FS
+
+var additionalOcppSchemasFolder = ""
 
 // registerSchemas registers all schemas from the embedded filesystem for a specific OCPP version.
 func registerSchemas(fs embed.FS, version ocpp.Version) error {
@@ -59,23 +61,66 @@ func registerOcpp201Schemas() error {
 	return registerSchemas(ocpp201Schemas, ocpp.V20)
 }
 
+// registerAdditionalSchemas registers additional OCPP schemas from a specified directory.
+// Files must be in JSON format and their names should match the OCPP message names (e.g. "BootNotificationRequest.json" or "BootNotificationResponse.json").
+
+func registerAdditionalSchemas(dir string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return errors.Wrap(err, "unable to read provided additional OCPP schemas directory")
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			// Read the schema file
+			schema, err := os.ReadFile(dir + "/" + entry.Name())
+			if err != nil {
+				return errors.Wrap(err, "unable to read additional OCPP schemas directory")
+			}
+
+			// Read the directory and register additional OCPP schemas
+			// Any existing schema with the same name will be overwritten
+			err = registry.RegisterSchema(ocpp.Version(defaultOcppVersion), entry.Name(), schema, schema_registry.WithOverwrite(true))
+			if err != nil {
+				return errors.Wrap(err, "failed to register additional OCPP schemas")
+			}
+
+		}
+	}
+
+	return nil
+}
+
 var validate = &cobra.Command{
 	Use:     "validate",
 	Short:   "Validate the OCPP message(s) against the registered OCPP schemas",
 	Long:    `Validate the OCPP message(s) against the registered OCPP schema(s).`,
-	Example: "chargeflow validate 1.6 [1234567, \"1\", \"BootNotification\", {\"chargePointVendor\": \"TestVendor\", \"chargePointModel\": \"TestModel\"}]",
+	Example: "chargeflow --version 1.6 validate [1234567, \"1\", \"BootNotification\", {\"chargePointVendor\": \"TestVendor\", \"chargePointModel\": \"TestModel\"}]",
 	Args:    cobra.MinimumNArgs(2),
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		// Populate the schema registry with OCPP schemas
-		err := registerOcpp16Schemas()
-		if err != nil {
-			return err
+		var err error
+		switch defaultOcppVersion {
+		case ocpp.V16.String():
+
+			err = registerOcpp16Schemas()
+			if err != nil {
+				return err
+			}
+		case ocpp.V20.String():
+			err = registerOcpp201Schemas()
+			if err != nil {
+				return err
+			}
 		}
 
-		err = registerOcpp201Schemas()
-		if err != nil {
-			return err
+		if additionalOcppSchemasFolder != "" {
+			err := registerAdditionalSchemas(additionalOcppSchemasFolder)
+			if err != nil {
+				return err
+			}
 		}
+
 		return nil
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -117,4 +162,9 @@ var validate = &cobra.Command{
 
 		return nil
 	},
+}
+
+func init() {
+	// Add flags for additional OCPP schemas folder
+	validate.Flags().StringVarP(&additionalOcppSchemasFolder, "schemas", "a", "", "Path to additional OCPP schemas folder")
 }
