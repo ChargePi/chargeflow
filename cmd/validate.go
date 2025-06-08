@@ -10,18 +10,20 @@ import (
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 	"os"
+	"path/filepath"
+	"strings"
 )
 
-var registry = schema_registry.NewSchemaRegistry(zap.L())
+var registry schema_registry.SchemaRegistry = schema_registry.NewInMemorySchemaRegistry(zap.L())
 
 var messageParser = parser.NewParser(zap.L())
 
 // OCPP 1.6 schemas
 //
-//go:embed ../schemas/ocpp_16/*.json
+//go:embed schemas/ocpp_16
 var ocpp16Schemas embed.FS
 
-//go:embed ../schemas/ocpp_201/*.json
+//go:embed schemas/ocpp_201
 var ocpp201Schemas embed.FS
 
 var additionalOcppSchemasFolder = ""
@@ -72,19 +74,20 @@ func registerAdditionalSchemas(dir string) error {
 
 	for _, entry := range entries {
 		if !entry.IsDir() {
+			fileName := entry.Name()
 			// Read the schema file
-			schema, err := os.ReadFile(dir + "/" + entry.Name())
+			schema, err := os.ReadFile(filepath.Join(dir, fileName))
 			if err != nil {
 				return errors.Wrap(err, "unable to read additional OCPP schemas directory")
 			}
 
 			// Read the directory and register additional OCPP schemas
 			// Any existing schema with the same name will be overwritten
-			err = registry.RegisterSchema(ocpp.Version(defaultOcppVersion), entry.Name(), schema, schema_registry.WithOverwrite(true))
+			action, _ := strings.CutSuffix(fileName, ".json")
+			err = registry.RegisterSchema(ocpp.Version(defaultOcppVersion), action, schema, schema_registry.WithOverwrite(true))
 			if err != nil {
 				return errors.Wrap(err, "failed to register additional OCPP schemas")
 			}
-
 		}
 	}
 
@@ -127,8 +130,9 @@ var validate = &cobra.Command{
 		logger := zap.L()
 		validator := validator.NewValidator(logger, registry)
 
-		ocppVersion := args[0]
-		message := args[1] // The message is expected to be a JSON string
+		// The argument (mesasage) is expected to be a JSON string in the format:
+		// [messageId, "1", "BootNotification", {"chargePointVendor": "TestVendor", "chargePointModel": "TestModel"}]
+		message := args[0]
 
 		parseMessage, parseResult, err := messageParser.ParseMessage(message)
 		if err != nil {
@@ -146,7 +150,7 @@ var validate = &cobra.Command{
 
 		logger.Info("✅ Message successfully parsed. Proceeding with validation.")
 
-		result, err := validator.ValidateMessage(ocpp.Version(ocppVersion), parseMessage)
+		result, err := validator.ValidateMessage(ocpp.Version(defaultOcppVersion), parseMessage)
 		if err != nil {
 			return err
 		}
