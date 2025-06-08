@@ -27,7 +27,7 @@ func NewValidator(logger *zap.Logger, registry schema_registry.SchemaRegistry) *
 // ValidateMessage validates the message. It checks if the message has an action, a payload, and a unique ID.
 // It also validates the payload against the schema for the given action and OCPP version.
 func (v *Validator) ValidateMessage(ocppVersion ocpp.Version, message ocpp.Message) (*ValidationResult, error) {
-	v.logger.Info("")
+	v.logger.Info("Validating message", zap.String("action", message.GetAction()))
 	result := NewValidationResult()
 
 	// Check if a message has a unique ID

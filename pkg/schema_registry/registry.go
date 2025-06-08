@@ -71,8 +71,8 @@ func (fsr *InMemorySchemaRegistry) RegisterSchema(ocppVersion ocpp.Version, acti
 	}
 
 	// Acquire write lock to modify the schemasPerOcppVersion map
-	fsr.mu.RLock()
-	defer fsr.mu.RUnlock()
+	fsr.mu.Lock()
+	defer fsr.mu.Unlock()
 
 	if _, exists := fsr.schemasPerOcppVersion[ocppVersion]; !exists {
 		fsr.schemasPerOcppVersion[ocppVersion] = make(map[string]*jsonschema.Schema)

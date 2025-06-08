@@ -31,11 +31,35 @@ You can install ChargeFlow by downloading the binary.
 You can use ChargeFlow to validate OCPP messages by running the following command:
 
 ```bash
-chargeflow validate 1.6 [1234567, "1", "BootNotification", {"chargePointVendor": "TestVendor", "chargePointModel": "TestModel"}]
+chargeflow validate '[2, "123456", "BootNotification", {"chargePointVendor": "TestVendor", "chargePointModel": "TestModel"}]'
+```
+
+For more options, you can run:
+
+```bash
+chargeflow validate
+
+Validate the OCPP message(s) against the registered OCPP schema(s).
+
+Usage:
+  chargeflow validate [flags]
+
+Examples:
+chargeflow --version 1.6 validate '[1, "123456", "BootNotification", {"chargePointVendor": "TestVendor", "chargePointModel": "TestModel"}]'
+
+Flags:
+  -h, --help             help for validate
+  -a, --schemas string   Path to additional OCPP schemas folder
+
+Global Flags:
+  -d, --debug            Enable debug mode
+  -v, --version string   OCPP version to use (1.6 or 2.0.1) (default "1.6")
 ```
 
 ChargeFlow will automatically determine whether it's a request or response message. All you need to provide is a OCPP
 version!
+
+Additionally, you can specify a custom path to vendor-specific OCPP schemas using the `--schemas` flag.
 
 ## License
 

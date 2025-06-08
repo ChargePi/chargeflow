@@ -5,6 +5,11 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/ChargePi/chargeflow/pkg/schema_registry"
+
+	"github.com/spf13/viper"
+	"go.uber.org/zap"
+
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -13,6 +18,9 @@ import (
 )
 
 func Test_registerAdditionalSchemas(t *testing.T) {
+	logger := zap.L()
+	registry = schema_registry.NewInMemorySchemaRegistry(logger)
+
 	tests := []struct {
 		name               string
 		schema             string
@@ -52,12 +60,7 @@ func Test_registerAdditionalSchemas(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tmpDefault := defaultOcppVersion
-			defaultOcppVersion = test.defaultOcppVersion
-
-			t.Cleanup(func() {
-				defaultOcppVersion = tmpDefault
-			})
+			viper.Set("ocpp.version", test.defaultOcppVersion)
 
 			r := require.New(t)
 
@@ -67,7 +70,7 @@ func Test_registerAdditionalSchemas(t *testing.T) {
 			r.NoError(err)
 
 			// Call the function to register additional schemas
-			err = registerAdditionalSchemas(tempDir)
+			err = registerAdditionalSchemas(logger, tempDir)
 			if test.expected != nil {
 				assert.ErrorContains(t, err, test.expected.Error())
 			} else {
@@ -89,10 +92,13 @@ func Test_Validate(t *testing.T) {
 		expectedErr error
 	}{
 		{
-			name: "",
+			name: "Defaults",
 		},
 		{
-			name: "",
+			name: "Invalid OCPP message",
+		},
+		{
+			name: "Invalid OCPP version",
 		},
 	}
 
