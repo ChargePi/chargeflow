@@ -64,6 +64,37 @@ var schema = []byte(`{
   }
   `)
 
+var responseSchema = []byte(`{
+    "$schema": "http://json-schema.org/draft-04/schema#",
+    "id": "urn:OCPP:1.6:2019:12:BootNotificationResponse",
+    "title": "BootNotificationResponse",
+    "type": "object",
+    "properties": {
+        "status": {
+            "type": "string",
+            "additionalProperties": false,
+            "enum": [
+                "Accepted",
+                "Pending",
+                "Rejected"
+            ]
+        },
+        "currentTime": {
+            "type": "string",
+            "format": "date-time"
+        },
+        "interval": {
+            "type": "integer"
+        }
+    },
+    "additionalProperties": false,
+    "required": [
+        "status",
+        "currentTime",
+        "interval"
+    ]
+}`)
+
 type validatorTestSuite struct {
 	suite.Suite
 	logger   *zap.Logger
@@ -118,15 +149,16 @@ func (s *validatorTestSuite) TestValidateMessage_HappyPath() {
 		{
 			name: "Valid OCPP 1.6 response",
 			setupRegistry: func(registry *mock_schema_registry.MockSchemaRegistry) {
-				schemaFromCompiler, err := s.compiler.Compile(schema)
+				schemaFromCompiler, err := s.compiler.Compile(responseSchema)
 				s.Require().NoError(err)
-				registry.EXPECT().GetSchema(ocpp.V20, "Response").Return(schemaFromCompiler, true)
+				registry.EXPECT().GetSchema(ocpp.V20, "BootNotificationResponse").Return(schemaFromCompiler, true)
 			},
 			ocppVersion: ocpp.V20,
 			message: &ocpp.CallResult{
 				MessageTypeId: ocpp.CALL_RESULT,
 				UniqueId:      uuid.NewString(),
-				Payload:       []byte("{\"chargePointVendor\":\"Vendor\",\"chargePointModel\":\"Model\"}"),
+				Action:        "BootNotification",
+				Payload:       []byte("{\"status\":\"Accepted\",\"currentTime\":\"2023-10-01T12:00:00Z\",\"interval\":10}"),
 			},
 			expected: NewValidationResult(),
 		},
