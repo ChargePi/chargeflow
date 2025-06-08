@@ -3,11 +3,12 @@ package validator
 import (
 	"fmt"
 	"github.com/ChargePi/chargeflow/pkg/ocpp"
-	"github.com/ChargePi/chargeflow/pkg/parser"
 	"github.com/ChargePi/chargeflow/pkg/schema_registry"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 )
+
+var ErrCannotCastToCallError = errors.New("cannot cast message to CallError")
 
 type Validator struct {
 	logger   *zap.Logger
@@ -23,7 +24,7 @@ func NewValidator(logger *zap.Logger, registry schema_registry.SchemaRegistry) *
 
 // ValidateMessage validates the message. It checks if the message has an action, a payload, and a unique ID.
 // It also validates the payload against the schema for the given action and OCPP version.
-func (v *Validator) ValidateMessage(ocppVersion ocpp.Version, message parser.Message) (*ValidationResult, error) {
+func (v *Validator) ValidateMessage(ocppVersion ocpp.Version, message ocpp.Message) (*ValidationResult, error) {
 	v.logger.Info("")
 	result := NewValidationResult()
 
@@ -36,16 +37,11 @@ func (v *Validator) ValidateMessage(ocppVersion ocpp.Version, message parser.Mes
 	payload := message.GetPayload()
 
 	switch message.GetMessageTypeId() {
-	case parser.CALL:
+	case ocpp.CALL:
 		// Check if a message has an action
 		action := message.GetAction()
 		if action == "" {
 			result.AddError(actionEmptyErr)
-		}
-
-		// Check if a message has a payload
-		if payload == nil {
-			result.AddError(payloadEmptyErr)
 			break
 		}
 
@@ -57,7 +53,7 @@ func (v *Validator) ValidateMessage(ocppVersion ocpp.Version, message parser.Mes
 			return result, errors.Wrap(err, "unable to validate message payload")
 		}
 
-	case parser.CALL_RESULT:
+	case ocpp.CALL_RESULT:
 		// Check if a message has an action
 		action := message.GetAction()
 		if action == "" {
@@ -71,27 +67,21 @@ func (v *Validator) ValidateMessage(ocppVersion ocpp.Version, message parser.Mes
 		// For CALL_RESULT messages, the action must end with "Response"
 		action = action + "Response"
 
-		// Check if a message has a payload
-		if payload == nil {
-			result.AddError(payloadEmptyErr)
-			break
-		}
-
 		err := v.validatePayload(ocppVersion, payload, action, result)
 		if err != nil {
 			return result, errors.Wrap(err, "unable to validate message payload")
 		}
 
-	case parser.CALL_ERROR:
+	case ocpp.CALL_ERROR:
 		// errors are not validated against schemas, so we skip validation for CALL_ERROR messages
 		// We will however validate the contents of the error message
-		callError, ok := message.(*parser.CallError)
+		callError, ok := message.(*ocpp.CallError)
 		if !ok {
-			return result, errors.New("message is not a CallError")
+			return result, ErrCannotCastToCallError
 		}
 
 		// Validate the error code
-		if !parser.IsErrorCodeValid(callError.ErrorCode) {
+		if !ocpp.IsErrorCodeValid(callError.ErrorCode) {
 			result.AddError(fmt.Sprintf("invalid error code: %s", callError.ErrorCode))
 		}
 	}
@@ -100,6 +90,12 @@ func (v *Validator) ValidateMessage(ocppVersion ocpp.Version, message parser.Mes
 }
 
 func (v *Validator) validatePayload(ocppVersion ocpp.Version, payload interface{}, action string, validationResults *ValidationResult) error {
+	// Check if a message has a payload
+	if payload == nil {
+		validationResults.AddError(payloadEmptyErr)
+		return nil
+	}
+
 	// Get the schema for the action and OCPP version
 	schema, found := v.registry.GetSchema(ocppVersion, action)
 	if !found {

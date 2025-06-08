@@ -1,10 +1,11 @@
 package parser
 
 import (
+	"encoding/json"
 	"fmt"
-	"go.uber.org/zap"
-
+	"github.com/ChargePi/chargeflow/pkg/ocpp"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 )
 
 type Parser struct {
@@ -17,7 +18,7 @@ func NewParser(logger *zap.Logger) *Parser {
 	}
 }
 
-func (p *Parser) ParseMessage(data string) (Message, *Result, error) {
+func (p *Parser) ParseMessage(data string) (ocpp.Message, *Result, error) {
 	p.logger.Debug("Parsing message from JSON", zap.String("data", data))
 
 	result := NewResult()
@@ -40,7 +41,7 @@ func (p *Parser) ParseMessage(data string) (Message, *Result, error) {
 }
 
 // Parses an OCPP-J message. The function expects an array of elements, as contained in the JSON message.
-func (p *Parser) parse(arr []interface{}, result *Result) (Message, error) {
+func (p *Parser) parse(arr []interface{}, result *Result) (ocpp.Message, error) {
 	// Checking message fields
 	if len(arr) < 3 {
 		result.AddError(fmt.Sprintf("Expected at least 3 elements in the message, got %d", len(arr)))
@@ -52,14 +53,14 @@ func (p *Parser) parse(arr []interface{}, result *Result) (Message, error) {
 		result.AddError("Expected first element to be a number (message type ID)")
 	}
 
-	typeId := MessageType(rawTypeId)
+	typeId := ocpp.MessageType(rawTypeId)
 	uniqueId, ok := arr[1].(string)
 	if !ok {
 		result.AddError("Expected second element to be a string (unique ID)")
 	}
 
 	switch typeId {
-	case CALL:
+	case ocpp.CALL:
 		p.logger.Debug("Message is of Request type")
 
 		if len(arr) != 4 {
@@ -73,22 +74,22 @@ func (p *Parser) parse(arr []interface{}, result *Result) (Message, error) {
 			return nil, errors.Errorf("Expected second element to be a string (action ID), got %v", arr[2])
 		}
 
-		call := Call{
-			MessageTypeId: CALL,
+		call := ocpp.Call{
+			MessageTypeId: ocpp.CALL,
 			UniqueId:      uniqueId,
 			Action:        action,
 			Payload:       arr[3],
 		}
 		return &call, nil
-	case CALL_RESULT:
+	case ocpp.CALL_RESULT:
 		p.logger.Debug("Message is of Response type")
-		callResult := CallResult{
-			MessageTypeId: CALL_RESULT,
+		callResult := ocpp.CallResult{
+			MessageTypeId: ocpp.CALL_RESULT,
 			UniqueId:      uniqueId,
 			Payload:       arr[3],
 		}
 		return &callResult, nil
-	case CALL_ERROR:
+	case ocpp.CALL_ERROR:
 		p.logger.Debug("Message is of Error response type")
 
 		if len(arr) < 4 {
@@ -106,13 +107,13 @@ func (p *Parser) parse(arr []interface{}, result *Result) (Message, error) {
 			result.AddError(fmt.Sprintf("Invalid element %v at 2, expected error code (string)", arr[2]))
 		}
 
-		errorCode := ErrorCode(rawErrorCode)
+		errorCode := ocpp.ErrorCode(rawErrorCode)
 		errorDescription := ""
 		if v, ok := arr[3].(string); ok {
 			errorDescription = v
 		}
-		callError := CallError{
-			MessageTypeId:    CALL_ERROR,
+		callError := ocpp.CallError{
+			MessageTypeId:    ocpp.CALL_ERROR,
 			UniqueId:         uniqueId,
 			ErrorCode:        errorCode,
 			ErrorDescription: errorDescription,
@@ -124,4 +125,22 @@ func (p *Parser) parse(arr []interface{}, result *Result) (Message, error) {
 		result.AddError("Unknown message type: " + fmt.Sprintf("%v", typeId))
 		return nil, errors.Errorf("Unknown message type: %v ", typeId)
 	}
+}
+
+// Unmarshals an OCPP-J json object from a byte array.
+// Returns the array of elements contained in the message.
+func ParseRawJsonMessage(dataJson []byte) ([]interface{}, error) {
+	var arr []interface{}
+	err := json.Unmarshal(dataJson, &arr)
+	if err != nil {
+		return nil, err
+	}
+	return arr, nil
+}
+
+// Unmarshals an OCPP-J json object from a JSON string.
+// Returns the array of elements contained in the message.
+func ParseJsonMessage(dataJson string) ([]interface{}, error) {
+	rawJson := []byte(dataJson)
+	return ParseRawJsonMessage(rawJson)
 }

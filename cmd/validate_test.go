@@ -80,5 +80,39 @@ func Test_registerSchemas(t *testing.T) {
 }
 
 func Test_Validate(t *testing.T) {
+	tests := []struct {
+		name        string
+		args        []string
+		flags       map[string]string
+		expectedErr error
+	}{
+		{
+			name: "",
+		},
+		{
+			name: "",
+		},
+	}
 
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			r := require.New(t)
+
+			// Setup: Set command arguments and flags
+			validate.SetArgs(test.args)
+
+			for flag, value := range test.flags {
+				err := validate.Flags().Set(flag, value)
+				r.NoError(err)
+			}
+
+			// Execute the command
+			err := validate.Execute()
+			if test.expectedErr != nil {
+				assert.ErrorContains(t, err, test.expectedErr.Error())
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 }

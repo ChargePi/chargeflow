@@ -99,7 +99,7 @@ var validate = &cobra.Command{
 	Short:   "Validate the OCPP message(s) against the registered OCPP schemas",
 	Long:    `Validate the OCPP message(s) against the registered OCPP schema(s).`,
 	Example: "chargeflow --version 1.6 validate [1234567, \"1\", \"BootNotification\", {\"chargePointVendor\": \"TestVendor\", \"chargePointModel\": \"TestModel\"}]",
-	Args:    cobra.MinimumNArgs(2),
+	Args:    cobra.MinimumNArgs(1),
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		// Populate the schema registry with OCPP schemas
 		var err error
