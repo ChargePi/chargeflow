@@ -186,4 +186,7 @@ var validate = &cobra.Command{
 func init() {
 	// Add flags for additional OCPP schemas folder
 	validate.Flags().StringVarP(&additionalOcppSchemasFolder, "schemas", "a", "", "Path to additional OCPP schemas folder")
+	validate.Flags().StringP("response-type", "r", "", "Response type to validate against (e.g. 'BootNotificationResponse'). Currently needed if you want to validate a single response message. ")
+
+	_ = viper.BindPFlag("response-type", validate.Flags().Lookup("response-type"))
 }

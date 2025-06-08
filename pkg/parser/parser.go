@@ -3,6 +3,7 @@ package parser
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/spf13/viper"
 
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
@@ -85,10 +86,14 @@ func (p *Parser) parse(arr []interface{}, result *Result) (ocpp.Message, error) 
 		return &call, nil
 	case ocpp.CALL_RESULT:
 		p.logger.Debug("Message is of Response type")
+		// Temporary workaround: Specify the response type
+		action := viper.GetString("response-type")
+
 		callResult := ocpp.CallResult{
 			MessageTypeId: ocpp.CALL_RESULT,
 			UniqueId:      uniqueId,
-			Payload:       arr[3],
+			Action:        action,
+			Payload:       arr[2],
 		}
 		return &callResult, nil
 	case ocpp.CALL_ERROR:
@@ -99,6 +104,7 @@ func (p *Parser) parse(arr []interface{}, result *Result) (ocpp.Message, error) 
 			return nil, errors.Errorf("Invalid Call Error message. Expected array length >= 4, got %v", arr[2])
 		}
 
+		// todo details validation?
 		var details interface{}
 		if len(arr) > 4 {
 			details = arr[4]

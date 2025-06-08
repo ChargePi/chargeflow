@@ -50,9 +50,10 @@ func (call *Call) GetPayload() interface{} {
 
 // An OCPP-J CallResult message, containing an OCPP Response.
 type CallResult struct {
-	MessageTypeId MessageType `json:"messageTypeId" validate:"required,eq=3"`
-	UniqueId      string      `json:"uniqueId" validate:"required,max=36"`
-	Payload       interface{} `json:"payload" validate:"required"`
+	MessageTypeId MessageType `json:"messageTypeId"`
+	UniqueId      string      `json:"uniqueId"`
+	Payload       interface{} `json:"payload"`
+	Action        string      `json:"action"`
 }
 
 func (callResult *CallResult) GetMessageTypeId() MessageType {
@@ -64,7 +65,7 @@ func (callResult *CallResult) GetUniqueId() string {
 }
 
 func (callResult *CallResult) GetAction() string {
-	return "Response" // CallResult does not have an action, so we return a placeholder.
+	return callResult.Action // CallResult does not have an action, so we return a placeholder.
 }
 
 func (callResult *CallResult) GetPayload() interface{} {
@@ -75,11 +76,11 @@ func (callResult *CallResult) GetPayload() interface{} {
 
 // An OCPP-J CallError message, containing an OCPP Error.
 type CallError struct {
-	MessageTypeId    MessageType `json:"messageTypeId" validate:"required,eq=4"`
-	UniqueId         string      `json:"uniqueId" validate:"required,max=36"`
-	ErrorCode        ErrorCode   `json:"errorCode" validate:"errorCode"`
-	ErrorDescription string      `json:"errorDescription" validate:"omitempty"`
-	ErrorDetails     interface{} `json:"errorDetails" validate:"omitempty"`
+	MessageTypeId    MessageType `json:"messageTypeId"`
+	UniqueId         string      `json:"uniqueId"`
+	ErrorCode        ErrorCode   `json:"errorCode"`
+	ErrorDescription string      `json:"errorDescription"`
+	ErrorDetails     interface{} `json:"errorDetails"`
 }
 
 func (callError *CallError) GetMessageTypeId() MessageType {
@@ -134,7 +135,7 @@ func OccurrenceConstraintErrorType(version Version) ErrorCode {
 	case V20:
 		return OccurrenceConstraintViolationV2
 	default:
-		panic(fmt.Sprintf(""))
+		panic(fmt.Sprintf("invalid dialect"))
 	}
 }
 

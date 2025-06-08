@@ -120,7 +120,7 @@ func (s *validatorTestSuite) TestValidateMessage_HappyPath() {
 			setupRegistry: func(registry *mock_schema_registry.MockSchemaRegistry) {
 				schemaFromCompiler, err := s.compiler.Compile(schema)
 				s.Require().NoError(err)
-				registry.EXPECT().GetSchema(ocpp.V20, "ResponseResponse").Return(schemaFromCompiler, true)
+				registry.EXPECT().GetSchema(ocpp.V20, "Response").Return(schemaFromCompiler, true)
 			},
 			ocppVersion: ocpp.V20,
 			message: &ocpp.CallResult{
