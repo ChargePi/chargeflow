@@ -27,10 +27,12 @@ func (v *ValidationResult) AddError(err string) {
 	v.errors = append(v.errors, err)
 }
 
+// IsValid returns true if the validation result is valid, false otherwise.
 func (v *ValidationResult) IsValid() bool {
 	return v.isValid
 }
 
+// Errors returns a list of errors collected during validation.
 func (v *ValidationResult) Errors() []string {
 	return v.errors
 }

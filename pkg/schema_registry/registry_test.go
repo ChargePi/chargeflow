@@ -2,12 +2,13 @@ package schema_registry
 
 import (
 	"encoding/json"
-	"github.com/ChargePi/chargeflow/pkg/ocpp"
-	"github.com/pkg/errors"
-	"go.uber.org/zap"
 	"testing"
 
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/suite"
+	"go.uber.org/zap"
+
+	"github.com/ChargePi/chargeflow/pkg/ocpp"
 )
 
 type registryTestSuite struct {
@@ -157,17 +158,17 @@ func (s *registryTestSuite) TestGetSchema() {
 		},
 	}
 
-	for _, tt := range tests {
-		s.Run(tt.name, func() {
+	for _, test := range tests {
+		s.Run(test.name, func() {
 			registry := NewInMemorySchemaRegistry(s.logger)
 
-			if tt.preconfigure != nil {
-				tt.preconfigure(registry)
+			if test.preconfigure != nil {
+				test.preconfigure(registry)
 			}
 
-			schema, found := registry.GetSchema(tt.ocppVersion, tt.action)
-			s.Equal(tt.expectedFound, found)
-			if tt.expectedFound {
+			schema, found := registry.GetSchema(test.ocppVersion, test.action)
+			s.Equal(test.expectedFound, found)
+			if test.expectedFound {
 				s.NotNil(schema)
 			} else {
 				s.Nil(schema)

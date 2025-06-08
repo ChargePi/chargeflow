@@ -2,10 +2,12 @@ package validator
 
 import (
 	"fmt"
-	"github.com/ChargePi/chargeflow/pkg/ocpp"
-	"github.com/ChargePi/chargeflow/pkg/schema_registry"
+
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
+
+	"github.com/ChargePi/chargeflow/pkg/ocpp"
+	"github.com/ChargePi/chargeflow/pkg/schema_registry"
 )
 
 var ErrCannotCastToCallError = errors.New("cannot cast message to CallError")

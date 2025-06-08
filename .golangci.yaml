@@ -2,15 +2,9 @@ version: "2"
 linters:
   default: all
   enable:
-    - bidichk
     - bodyclose
-    - canonicalheader
-    - containedctx
-    - contextcheck
     - copyloopvar
-    - cyclop
     - decorder
-    - depguard
     - errcheck
     - errname
     - forbidigo
@@ -23,17 +17,10 @@ linters:
     - misspell
     - nestif
     - nlreturn
-    - noctx
-    - nonamedreturns
     - perfsprint
-    - prealloc
     - predeclared
-    - protogetter
-    - spancheck
     - staticcheck
     - testifylint
-    - thelper
-    - unconvert
     - unparam
     - unused
     - wastedassign
@@ -41,9 +28,14 @@ linters:
     - wrapcheck
   exclusions:
     generated: lax
+    paths:
+      - ./gen
+      - ./pkg/report
 formatters:
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/ChargePi/chargeflow
   enable:
-    - gci
     - gofmt
-    - gofumpt
     - goimports

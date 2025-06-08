@@ -2,13 +2,14 @@ package schema_registry
 
 import (
 	"encoding/json"
-	"go.uber.org/zap"
 	"strings"
 	"sync"
 
-	"github.com/ChargePi/chargeflow/pkg/ocpp"
 	"github.com/kaptinlin/jsonschema"
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
+
+	"github.com/ChargePi/chargeflow/pkg/ocpp"
 )
 
 var compiler = jsonschema.NewCompiler()

@@ -3,9 +3,11 @@ package parser
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/ChargePi/chargeflow/pkg/ocpp"
+
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
+
+	"github.com/ChargePi/chargeflow/pkg/ocpp"
 )
 
 type Parser struct {
@@ -127,7 +129,7 @@ func (p *Parser) parse(arr []interface{}, result *Result) (ocpp.Message, error) 
 	}
 }
 
-// Unmarshals an OCPP-J json object from a byte array.
+// ParseRawJsonMessage Unmarshals an OCPP-J json object from a byte array.
 // Returns the array of elements contained in the message.
 func ParseRawJsonMessage(dataJson []byte) ([]interface{}, error) {
 	var arr []interface{}
@@ -138,7 +140,7 @@ func ParseRawJsonMessage(dataJson []byte) ([]interface{}, error) {
 	return arr, nil
 }
 
-// Unmarshals an OCPP-J json object from a JSON string.
+// ParseJsonMessage Unmarshals an OCPP-J json object from a JSON string.
 // Returns the array of elements contained in the message.
 func ParseJsonMessage(dataJson string) ([]interface{}, error) {
 	rawJson := []byte(dataJson)

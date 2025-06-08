@@ -6,8 +6,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/ChargePi/chargeflow/cmd"
 	"go.uber.org/zap"
+
+	"github.com/ChargePi/chargeflow/cmd"
 )
 
 func main() {
@@ -27,5 +28,4 @@ func main() {
 	if err := cmd.Execute(ctx); err != nil {
 		zap.L().Fatal("Unable to run", zap.Error(err))
 	}
-
 }

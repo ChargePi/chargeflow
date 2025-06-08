@@ -1,15 +1,16 @@
 package validator
 
 import (
-	mock_schema_registry "github.com/ChargePi/chargeflow/gen/mocks/pkg/schema_registry"
-	"github.com/ChargePi/chargeflow/pkg/ocpp"
+	"testing"
+
 	"github.com/google/uuid"
 	"github.com/kaptinlin/jsonschema"
 	"github.com/pkg/errors"
-	"go.uber.org/zap"
-	"testing"
-
 	"github.com/stretchr/testify/suite"
+	"go.uber.org/zap"
+
+	mock_schema_registry "github.com/ChargePi/chargeflow/gen/mocks/pkg/schema_registry"
+	"github.com/ChargePi/chargeflow/pkg/ocpp"
 )
 
 var schema = []byte(`{
@@ -155,7 +156,7 @@ func (s *validatorTestSuite) TestValidateMessage_HappyPath() {
 
 			result, err := validator.ValidateMessage(tt.ocppVersion, tt.message)
 			s.NoError(err)
-			s.Lenf(result.Errors(), 0, "expected no validation errors but got %v", result.Errors())
+			s.Emptyf(result.Errors(), "expected no validation errors but got %v", result.Errors())
 		})
 	}
 }
@@ -303,21 +304,21 @@ func (s *validatorTestSuite) TestValidateMessage_UnhappyPath() {
 		},
 	}
 
-	for _, tt := range tests {
-		s.Run(tt.name, func() {
+	for _, test := range tests {
+		s.Run(test.name, func() {
 			registry := mock_schema_registry.NewMockSchemaRegistry(s.T())
-			if tt.setupRegistry != nil {
-				tt.setupRegistry(registry)
+			if test.setupRegistry != nil {
+				test.setupRegistry(registry)
 			}
 
 			validator := NewValidator(s.logger, registry)
 
-			result, err := validator.ValidateMessage(tt.ocppVersion, tt.message)
-			if tt.expectedErr != nil {
-				s.ErrorContains(err, tt.expectedErr.Error())
+			result, err := validator.ValidateMessage(test.ocppVersion, test.message)
+			if test.expectedErr != nil {
+				s.ErrorContains(err, test.expectedErr.Error())
 			} else {
 				s.NoError(err)
-				for _, e := range tt.expected.Errors() {
+				for _, e := range test.expected.Errors() {
 					s.Contains(result.Errors(), e)
 				}
 			}

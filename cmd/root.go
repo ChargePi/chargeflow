@@ -2,10 +2,12 @@ package cmd
 
 import (
 	"context"
-	"github.com/ChargePi/chargeflow/pkg/ocpp"
+
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+
+	"github.com/ChargePi/chargeflow/pkg/ocpp"
 )
 
 const (

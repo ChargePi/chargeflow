@@ -2,16 +2,18 @@ package cmd
 
 import (
 	"embed"
+	"os"
+	"path/filepath"
+	"strings"
+
+	"github.com/pkg/errors"
+	"github.com/spf13/cobra"
+	"go.uber.org/zap"
+
 	"github.com/ChargePi/chargeflow/pkg/ocpp"
 	"github.com/ChargePi/chargeflow/pkg/parser"
 	"github.com/ChargePi/chargeflow/pkg/schema_registry"
 	"github.com/ChargePi/chargeflow/pkg/validator"
-	"github.com/pkg/errors"
-	"github.com/spf13/cobra"
-	"go.uber.org/zap"
-	"os"
-	"path/filepath"
-	"strings"
 )
 
 var registry schema_registry.SchemaRegistry = schema_registry.NewInMemorySchemaRegistry(zap.L())
@@ -130,7 +132,7 @@ var validate = &cobra.Command{
 		logger := zap.L()
 		validator := validator.NewValidator(logger, registry)
 
-		// The argument (mesasage) is expected to be a JSON string in the format:
+		// The argument (message) is expected to be a JSON string in the format:
 		// [messageId, "1", "BootNotification", {"chargePointVendor": "TestVendor", "chargePointModel": "TestModel"}]
 		message := args[0]
 

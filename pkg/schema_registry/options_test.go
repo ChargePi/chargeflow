@@ -43,7 +43,6 @@ func (s *optionsTestSuite) TestOptions() {
 			s.Equal(tt.expected, *options)
 		})
 	}
-
 }
 
 func TestRegistrySchemaOptions(t *testing.T) {
