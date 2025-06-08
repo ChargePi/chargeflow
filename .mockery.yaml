@@ -1,7 +1,10 @@
-with-expecter: true
 dir: gen/mocks/{{.InterfaceDirRelative}}
-mockname: "Mock{{.InterfaceName}}"
-outpkg: "{{.PackageName}}"
+structname: "{{.Mock}}{{.InterfaceName}}"
+pkgname: "mock_{{.SrcPackageName|snakecase}}"
 filename: "{{.InterfaceName|snakecase}}_mock.go"
+formatter: goimports
+template: testify
 packages:
-#todo
+  github.com/ChargePi/chargeflow/pkg/schema_registry:
+    config:
+      all: true
