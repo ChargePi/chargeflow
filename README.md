@@ -15,6 +15,8 @@ with various Charge Point Management Systems or Charge Point implementations.
 - [ ] Validate messages from a file
 - [ ] Support for OCPP 2.1
 - [ ] Support for signed messages
+- [ ] Compatibility checks
+- [ ] Remote schema registry for vendors and models
 
 ## Installation
 
