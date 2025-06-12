@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -16,6 +17,9 @@ import (
 
 	"github.com/ChargePi/chargeflow/pkg/ocpp"
 )
+
+var validOcppRequest = "[2, \"1234567890\", \"Authorize\", {\"idTag\": \"1234567890\"}]"
+var validOcppResponse = "[3, \"1234567890\", {\"idTagInfo\": {\"status\": \"Accepted\"}}]"
 
 func Test_registerAdditionalSchemas(t *testing.T) {
 	logger := zap.L()
@@ -80,11 +84,10 @@ func Test_registerAdditionalSchemas(t *testing.T) {
 	}
 }
 
-func Test_registerSchemas(t *testing.T) {
-
-}
-
 func Test_Validate(t *testing.T) {
+	l, _ := zap.NewProduction()
+	zap.ReplaceGlobals(l)
+
 	tests := []struct {
 		name        string
 		args        []string
@@ -92,27 +95,45 @@ func Test_Validate(t *testing.T) {
 		expectedErr error
 	}{
 		{
-			name: "Defaults",
+			name:  "OCPP 1.6 Request",
+			args:  []string{validOcppRequest},
+			flags: map[string]string{},
 		},
 		{
-			name: "Invalid OCPP message",
+			name: "OCPP 1.6 Response",
+			args: []string{validOcppResponse},
+			flags: map[string]string{
+				"response-type": "Authorize",
+			},
+		},
+		{
+			name:  "Invalid OCPP message",
+			args:  []string{"{\"invalid\": \"message\"}"},
+			flags: map[string]string{},
 		},
 		{
 			name: "Invalid OCPP version",
+			args: []string{validOcppRequest},
+			flags: map[string]string{
+				"ocpp-version": "invalid_version",
+			},
+		},
+		{
+			name:  "Provided response without response-type",
+			args:  []string{validOcppResponse},
+			flags: map[string]string{},
 		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			r := require.New(t)
-
 			// Setup: Set command arguments and flags
-			validate.SetArgs(test.args)
-
+			args := test.args
 			for flag, value := range test.flags {
-				err := validate.Flags().Set(flag, value)
-				r.NoError(err)
+				args = append(args, fmt.Sprintf("--%s=%s", flag, value))
 			}
+
+			validate.SetArgs(args)
 
 			// Execute the command
 			err := validate.Execute()
