@@ -1,8 +1,9 @@
 package ocpp
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestFormatErrorType(t *testing.T) {
