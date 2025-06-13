@@ -33,6 +33,6 @@ func (s *resultTestSuite) TestErrors() {
 	s.NotContains(errors, "third error")
 }
 
-func TestRegistry(t *testing.T) {
+func TestResult(t *testing.T) {
 	suite.Run(t, new(resultTestSuite))
 }

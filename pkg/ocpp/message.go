@@ -1,9 +1,5 @@
 package ocpp
 
-import (
-	"fmt"
-)
-
 // MessageType identifies the type of message exchanged between two OCPP endpoints.
 type MessageType int
 
@@ -124,7 +120,7 @@ func FormatErrorType(version Version) ErrorCode {
 	case V20:
 		return FormatViolationV2
 	default:
-		panic(fmt.Sprintf("invalid dialect"))
+		panic("invalid dialect")
 	}
 }
 
@@ -135,7 +131,7 @@ func OccurrenceConstraintErrorType(version Version) ErrorCode {
 	case V20:
 		return OccurrenceConstraintViolationV2
 	default:
-		panic(fmt.Sprintf("invalid dialect"))
+		panic("invalid dialect")
 	}
 }
 
