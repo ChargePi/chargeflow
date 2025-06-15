@@ -1,10 +1,11 @@
 package parser
 
 import (
-	"github.com/ChargePi/chargeflow/pkg/ocpp"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 	"testing"
+
+	"github.com/ChargePi/chargeflow/pkg/ocpp"
 
 	"github.com/stretchr/testify/suite"
 )

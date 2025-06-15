@@ -1,5 +1,7 @@
 package parser
 
+import "github.com/ChargePi/chargeflow/pkg/ocpp"
+
 type Result struct {
 	isValid bool
 	errors  []string
@@ -27,4 +29,15 @@ func (v *Result) IsValid() bool {
 
 func (v *Result) Errors() []string {
 	return v.errors
+}
+
+type RequestResponsePairResult struct {
+	// Request is the parsed OCPP request message.
+	Request ocpp.Message
+
+	// Response can be either ocpp.CallResult or ocpp.CallError (or nil if no request was provided).
+	Response ocpp.Message
+
+	// Result contains the parsing validation result.
+	Result Result
 }
