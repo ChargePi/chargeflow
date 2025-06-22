@@ -102,7 +102,7 @@ func (fp *ParserV2) parse(index int, arr []interface{}, result *Result) {
 
 		action, ok := arr[2].(string)
 		if !ok {
-			result.AddError("Expected second element to be a string (action ID)")
+			result.AddError("Expected third element to be a string (action)")
 			break
 		}
 
