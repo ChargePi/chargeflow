@@ -1,8 +1,9 @@
 package report
 
 import (
-	"github.com/stretchr/testify/suite"
 	"testing"
+
+	"github.com/stretchr/testify/suite"
 )
 
 type statisticsTestSuite struct {
@@ -76,6 +77,30 @@ func (s *statisticsTestSuite) TestInvalidRequestPercentage() {
 			}
 
 			result := stats.InvalidRequestPercentage()
+			s.Equal(tt.expected, result)
+		})
+	}
+}
+
+func (s *statisticsTestSuite) TestInvalidResponsePercentage() {
+	tests := []struct {
+		name             string
+		invalidResponses int
+		validResponses   int
+		expected         float64
+	}{
+		{"100%", 50, 0, 100.0},
+		{"50%", 100, 100, 50.0},
+		{"0%", 0, 200, 0.0},
+	}
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			stats := &Statistics{
+				InvalidResponses: tt.invalidResponses,
+				ValidResponses:   tt.validResponses,
+			}
+
+			result := stats.InvalidResponsePercentage()
 			s.Equal(tt.expected, result)
 		})
 	}
