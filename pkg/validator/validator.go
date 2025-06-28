@@ -62,10 +62,6 @@ func (v *Validator) ValidateMessage(ocppVersion ocpp.Version, message ocpp.Messa
 			result.AddError(actionEmptyErr)
 		}
 
-		// Todo try the brute force approach
-		// Getting through all the schemas and checking if it matches one of them
-		// Another approach would be to validate against a matching UniqueId action
-
 		// For CALL_RESULT messages, the action must end with "Response"
 		action = action + "Response"
 
