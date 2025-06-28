@@ -1,8 +1,9 @@
 package parser
 
 import (
-	"github.com/stretchr/testify/suite"
 	"testing"
+
+	"github.com/stretchr/testify/suite"
 )
 
 type messageParsingTestSuite struct {
