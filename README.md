@@ -8,11 +8,11 @@ with various Charge Point Management Systems or Charge Point implementations.
 - [x] Parse Raw OCPP JSON messages
 - [x] Support for OCPP 1.6 and 2.0.1
 - [x] Request and Response payload validation
+- [x] Validate messages from a file
 
 ### Roadmap
 
 - [ ] Generate human-readable reports
-- [ ] Validate messages from a file
 - [ ] Support for OCPP 2.1
 - [ ] Support for signed messages
 - [ ] Compatibility checks
