@@ -20,6 +20,7 @@ func (s *statisticsTestSuite) TestValidRequestPercentage() {
 		{"100%", 50, 0, 100.0},
 		{"50%", 100, 100, 50.0},
 		{"0%", 0, 100, 0.0},
+		{"0%", 0, 0, 0.0},
 	}
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
@@ -44,6 +45,7 @@ func (s *statisticsTestSuite) TestValidResponsePercentage() {
 		{"100%", 50, 0, 100.0},
 		{"50%", 100, 100, 50.0},
 		{"0%", 0, 200, 0.0},
+		{"0%", 0, 0, 0.0},
 	}
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
@@ -68,6 +70,7 @@ func (s *statisticsTestSuite) TestInvalidRequestPercentage() {
 		{"100%", 50, 0, 100.0},
 		{"50%", 100, 100, 50.0},
 		{"0%", 0, 200, 0.0},
+		{"0%", 0, 0, 0.0},
 	}
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
@@ -92,6 +95,7 @@ func (s *statisticsTestSuite) TestInvalidResponsePercentage() {
 		{"100%", 50, 0, 100.0},
 		{"50%", 100, 100, 50.0},
 		{"0%", 0, 200, 0.0},
+		{"0%", 0, 0, 0.0},
 	}
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
@@ -119,6 +123,7 @@ func (s *statisticsTestSuite) TestTotalValidMessagesPercentage() {
 		{"100%", 0, 0, 100, 10, 100.0},
 		{"50%", 100, 100, 100, 100, 50.0},
 		{"0%", 100, 100, 0, 0, 0.0},
+		{"0%", 0, 0, 0.0, 0, 0},
 	}
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
@@ -147,6 +152,7 @@ func (s *statisticsTestSuite) TestTotalInvalidMessagesPercentage() {
 		{"100%", 50, 50, 0, 0, 100.0},
 		{"50%", 100, 100, 100, 100, 50.0},
 		{"0%", 0, 0, 200, 200, 0.0},
+		{"0%", 0, 0, 0.0, 0.0, 0.0},
 	}
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
