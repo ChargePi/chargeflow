@@ -1,12 +1,14 @@
 package report
 
 import (
-	"github.com/ChargePi/chargeflow/pkg/parser"
-	"github.com/ChargePi/chargeflow/pkg/validator"
+	"testing"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"go.uber.org/zap"
-	"testing"
+
+	"github.com/ChargePi/chargeflow/pkg/parser"
+	"github.com/ChargePi/chargeflow/pkg/validator"
 
 	"github.com/stretchr/testify/suite"
 )

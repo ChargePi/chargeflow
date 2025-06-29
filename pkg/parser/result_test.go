@@ -1,8 +1,9 @@
 package parser
 
 import (
-	"github.com/ChargePi/chargeflow/pkg/ocpp"
 	"testing"
+
+	"github.com/ChargePi/chargeflow/pkg/ocpp"
 
 	"github.com/stretchr/testify/suite"
 )
