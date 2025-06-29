@@ -1,10 +1,12 @@
 package parser
 
 import (
-	"github.com/ChargePi/chargeflow/pkg/ocpp"
+	"testing"
+
 	"github.com/stretchr/testify/suite"
 	"go.uber.org/zap"
-	"testing"
+
+	"github.com/ChargePi/chargeflow/pkg/ocpp"
 )
 
 type parserSuite struct {
@@ -12,27 +14,31 @@ type parserSuite struct {
 }
 
 func (s *parserSuite) TestParse() {
-	logger, _ := zap.NewDevelopment()
+	logger := zap.NewExample()
 
 	tests := []struct {
 		name                      string
 		data                      []string
-		expectedResults           map[string]RequestResponsePairResult
+		expectedResults           map[string]RequestResponseResult
 		expectedNonParsedMessages map[string]Result
 		expectedErr               error
 	}{
 		{
 			name: "Valid Request",
 			data: []string{`[2,"1234", "BootNotification", {"chargePointVendor": "TestVendor", "chargePointModel": "TestModel"}]`},
-			expectedResults: map[string]RequestResponsePairResult{
+			expectedResults: map[string]RequestResponseResult{
 				"1234": {
-					Request: &ocpp.Call{
-						MessageTypeId: 2,
-						UniqueId:      "1234",
-						Action:        "BootNotification",
-						Payload:       map[string]interface{}{"chargePointVendor": "TestVendor", "chargePointModel": "TestModel"},
+					Request: Result{
+						message: &ocpp.Call{
+							MessageTypeId: 2,
+							UniqueId:      "1234",
+							Action:        "BootNotification",
+							Payload:       map[string]interface{}{"chargePointVendor": "TestVendor", "chargePointModel": "TestModel"},
+						},
+						isValid: true,
+						errors:  make([]string, 0),
 					},
-					Result: *NewResult(),
+					Response: *NewResult(),
 				},
 			},
 			expectedNonParsedMessages: map[string]Result{},
@@ -43,21 +49,28 @@ func (s *parserSuite) TestParse() {
 			data: []string{
 				`[2,"1234", "BootNotification", {"chargePointVendor": "TestVendor", "chargePointModel": "TestModel"}]`,
 				`[3,"1234", {"status": "Accepted"}]`},
-			expectedResults: map[string]RequestResponsePairResult{
+			expectedResults: map[string]RequestResponseResult{
 				"1234": {
-					Request: &ocpp.Call{
-						MessageTypeId: 2,
-						UniqueId:      "1234",
-						Action:        "BootNotification",
-						Payload:       map[string]interface{}{"chargePointVendor": "TestVendor", "chargePointModel": "TestModel"},
+					Request: Result{
+						message: &ocpp.Call{
+							MessageTypeId: 2,
+							UniqueId:      "1234",
+							Action:        "BootNotification",
+							Payload:       map[string]interface{}{"chargePointVendor": "TestVendor", "chargePointModel": "TestModel"},
+						},
+						isValid: true,
+						errors:  make([]string, 0),
 					},
-					Response: &ocpp.CallResult{
-						MessageTypeId: 3,
-						UniqueId:      "1234",
-						Action:        "BootNotification",
-						Payload:       map[string]interface{}{"status": "Accepted"},
+					Response: Result{
+						message: &ocpp.CallResult{
+							MessageTypeId: 3,
+							UniqueId:      "1234",
+							Action:        "BootNotification",
+							Payload:       map[string]interface{}{"status": "Accepted"},
+						},
+						isValid: true,
+						errors:  make([]string, 0),
 					},
-					Result: *NewResult(),
 				},
 			},
 			expectedNonParsedMessages: map[string]Result{},
@@ -68,44 +81,49 @@ func (s *parserSuite) TestParse() {
 			data: []string{
 				`[2,"1234", "BootNotification", {"chargePointVendor": "TestVendor", "chargePointModel": "TestModel"}]`,
 				`[4,"1234", "GenericError", "An error occurred"]`},
-			expectedResults: map[string]RequestResponsePairResult{
+			expectedResults: map[string]RequestResponseResult{
 				"1234": {
-					Request: &ocpp.Call{
-						MessageTypeId: 2,
-						UniqueId:      "1234",
-						Action:        "BootNotification",
-						Payload:       map[string]interface{}{"chargePointVendor": "TestVendor", "chargePointModel": "TestModel"},
+					Request: Result{
+						message: &ocpp.Call{
+							MessageTypeId: 2,
+							UniqueId:      "1234",
+							Action:        "BootNotification",
+							Payload:       map[string]interface{}{"chargePointVendor": "TestVendor", "chargePointModel": "TestModel"},
+						},
+						isValid: true,
+						errors:  make([]string, 0),
 					},
-					Response: &ocpp.CallError{
-						MessageTypeId:    4,
-						UniqueId:         "1234",
-						ErrorCode:        "GenericError",
-						ErrorDescription: "An error occurred",
+					Response: Result{
+						message: &ocpp.CallError{
+							MessageTypeId:    4,
+							UniqueId:         "1234",
+							ErrorCode:        "GenericError",
+							ErrorDescription: "An error occurred",
+						},
+						isValid: true,
+						errors:  make([]string, 0),
 					},
-					Result: *NewResult(),
 				},
 			},
 			expectedNonParsedMessages: map[string]Result{},
 			expectedErr:               nil,
 		},
 		{
-			name: "Invalid Message",
-			data: []string{`[5,"1234", "InvalidMessage"]`},
-			expectedResults: map[string]RequestResponsePairResult{
+			name:            "Invalid Message",
+			data:            []string{`[5,"1234", "InvalidMessage"]`},
+			expectedResults: map[string]RequestResponseResult{},
+			expectedNonParsedMessages: map[string]Result{
 				"1234": {
-					Result: Result{
-						isValid: false,
-						errors:  []string{"Unknown message type: 5"},
-					},
+					isValid: false,
+					errors:  []string{"Unknown message type: 5"},
 				},
 			},
-			expectedNonParsedMessages: map[string]Result{},
-			expectedErr:               nil,
+			expectedErr: nil,
 		},
 		{
 			name:            "Invalid JSON",
 			data:            []string{`{"invalid": "json"}`},
-			expectedResults: map[string]RequestResponsePairResult{},
+			expectedResults: map[string]RequestResponseResult{},
 			expectedNonParsedMessages: map[string]Result{
 				"line 1": {
 					isValid: false,
@@ -117,17 +135,19 @@ func (s *parserSuite) TestParse() {
 		{
 			name: "No unique ID",
 			data: []string{`[2, "", "BootNotification", {"chargePointVendor": "TestVendor", "chargePointModel": "TestModel"}]`},
-			expectedResults: map[string]RequestResponsePairResult{
+			expectedResults: map[string]RequestResponseResult{
 				"line 1": {
-					Request: &ocpp.Call{
-						MessageTypeId: 2,
-						UniqueId:      "line 1",
-						Action:        "BootNotification",
-						Payload:       map[string]interface{}{"chargePointVendor": "TestVendor", "chargePointModel": "TestModel"},
+					Request: Result{
+						message: &ocpp.Call{
+							MessageTypeId: 2,
+							UniqueId:      "line 1",
+							Action:        "BootNotification",
+							Payload:       map[string]interface{}{"chargePointVendor": "TestVendor", "chargePointModel": "TestModel"},
+						},
+						isValid: false,
+						errors:  []string{"Unique ID is missing in the message"},
 					},
-					Result: Result{
-						errors: []string{"Unique ID is missing in the message"},
-					},
+					Response: *NewResult(),
 				},
 			},
 			expectedNonParsedMessages: map[string]Result{},
@@ -143,40 +163,49 @@ func (s *parserSuite) TestParse() {
 				`[4,"12344", "GenericError", "An error occurred"]`,
 				`{"invalid": "json"}`,
 			},
-			expectedResults: map[string]RequestResponsePairResult{
+			expectedResults: map[string]RequestResponseResult{
 				"1234": {
-					Request: &ocpp.Call{
-						MessageTypeId: 2,
-						UniqueId:      "1234",
-						Action:        "BootNotification",
-						Payload:       map[string]interface{}{"chargePointVendor": "TestVendor", "chargePointModel": "TestModel"},
+					Request: Result{
+						message: &ocpp.Call{
+							MessageTypeId: 2,
+							UniqueId:      "1234",
+							Action:        "BootNotification",
+							Payload:       map[string]interface{}{"chargePointVendor": "TestVendor", "chargePointModel": "TestModel"},
+						},
+						isValid: true,
+						errors:  make([]string, 0),
 					},
-					Response: &ocpp.CallResult{
-						MessageTypeId: 3,
-						UniqueId:      "1234",
-						Action:        "BootNotification",
-						Payload:       map[string]interface{}{"status": "Accepted"},
+					Response: Result{
+						message: &ocpp.CallResult{
+							MessageTypeId: 3,
+							UniqueId:      "1234",
+							Action:        "BootNotification",
+							Payload:       map[string]interface{}{"status": "Accepted"},
+						},
+						isValid: true,
+						errors:  make([]string, 0),
 					},
-					Result: *NewResult(),
 				},
 				"12344": {
-					Request: &ocpp.Call{
-						MessageTypeId: 2,
-						UniqueId:      "12344",
-						Action:        "BootNotification",
-						Payload:       map[string]interface{}{"chargePointVendor": "TestVendor", "chargePointModel": "TestModel"},
+					Request: Result{
+						message: &ocpp.Call{
+							MessageTypeId: 2,
+							UniqueId:      "12344",
+							Action:        "BootNotification",
+							Payload:       map[string]interface{}{"chargePointVendor": "TestVendor", "chargePointModel": "TestModel"},
+						},
+						isValid: true,
+						errors:  make([]string, 0),
 					},
-					Response: &ocpp.CallError{
-						MessageTypeId:    4,
-						UniqueId:         "12344",
-						ErrorCode:        "GenericError",
-						ErrorDescription: "An error occurred",
-					},
-					Result: *NewResult(),
-				},
-				"12345": {
-					Result: Result{
-						errors: []string{"Unknown message type: 5"},
+					Response: Result{
+						message: &ocpp.CallError{
+							MessageTypeId:    4,
+							UniqueId:         "12344",
+							ErrorCode:        "GenericError",
+							ErrorDescription: "An error occurred",
+						},
+						isValid: true,
+						errors:  make([]string, 0),
 					},
 				},
 			},
@@ -186,6 +215,10 @@ func (s *parserSuite) TestParse() {
 					errors: []string{
 						"Message is not a valid OCPP message",
 					},
+				},
+				"12345": {
+					isValid: false,
+					errors:  []string{"Unknown message type: 5"},
 				},
 			},
 			expectedErr: nil,

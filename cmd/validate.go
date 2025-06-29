@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/ChargePi/chargeflow/internal/validation"
+
 	"github.com/spf13/viper"
 
 	"github.com/pkg/errors"
@@ -13,14 +15,10 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/ChargePi/chargeflow/pkg/ocpp"
-	"github.com/ChargePi/chargeflow/pkg/parser"
 	"github.com/ChargePi/chargeflow/pkg/schema_registry"
-	"github.com/ChargePi/chargeflow/pkg/validator"
 )
 
 var registry schema_registry.SchemaRegistry
-
-var messageParser *parser.Parser
 
 // OCPP 1.6 schemas
 //
@@ -70,7 +68,6 @@ func registerSchemas(logger *zap.Logger, embeddedDir embed.FS, version ocpp.Vers
 
 // registerAdditionalSchemas registers additional OCPP schemas from a specified directory.
 // Files must be in JSON format and their names should match the OCPP message names (e.g. "BootNotificationRequest.json" or "BootNotificationResponse.json").
-
 func registerAdditionalSchemas(logger *zap.Logger, dir string) error {
 	ocppVersion := viper.GetString("ocpp.version")
 	logger.Debug("Registering additional OCPP schemas from directory", zap.String("directory", dir))
@@ -106,15 +103,14 @@ var validate = &cobra.Command{
 	Use:          "validate",
 	Short:        "Validate the OCPP message(s) against the registered OCPP schemas",
 	Long:         `Validate the OCPP message(s) against the registered OCPP schema(s).`,
-	Example:      "chargeflow --version 1.6 validate '[1, \"123456\", \"BootNotification\", {\"chargePointVendor\": \"TestVendor\", \"chargePointModel\": \"TestModel\"}]'",
-	Args:         cobra.MinimumNArgs(1),
+	Example:      "chargeflow --version 1.6 validate '[2, \"123456\", \"BootNotification\", {\"chargePointVendor\": \"TestVendor\", \"chargePointModel\": \"TestModel\"}]'",
+	Args:         cobra.RangeArgs(0, 1),
 	SilenceUsage: true,
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		ocppVersion := viper.GetString("ocpp.version")
 		logger := zap.L()
 
 		registry = schema_registry.NewInMemorySchemaRegistry(logger)
-		messageParser = parser.NewParser(logger)
 
 		// Populate the schema registry with OCPP schemas
 		var err error
@@ -142,41 +138,23 @@ var validate = &cobra.Command{
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ocppVersion := viper.GetString("ocpp.version")
+		file := viper.GetString("file")
+		version := ocpp.Version(ocppVersion)
+
 		logger := zap.L()
-		validator := validator.NewValidator(logger, registry)
+		service := validation.NewService(logger, registry)
 
-		// The argument (message) is expected to be a JSON string in the format:
-		// '[2, "uniqueId", "BootNotification", {"chargePointVendor": "TestVendor", "chargePointModel": "TestModel"}]'
 		message := args[0]
-
-		parseMessage, parseResult, err := messageParser.ParseMessage(message)
-		if err != nil {
-			return err
-		}
-
-		if !parseResult.IsValid() {
-			logger.Info("❌ Failure: The message could not be parsed or had syntax errors:")
-			for _, err := range parseResult.Errors() {
-				logger.Info("- " + err)
-			}
-
-			return nil
-		}
-
-		logger.Info("✅ Message successfully parsed. Proceeding with validation.")
-
-		result, err := validator.ValidateMessage(ocpp.Version(ocppVersion), parseMessage)
-		if err != nil {
-			return err
-		}
-
-		if result.IsValid() {
-			logger.Info("✅ Success: The message is valid according to the OCPP schema.")
-		} else {
-			logger.Info("❌ Failure: The message is NOT valid according to the OCPP schema:")
-			for _, err := range result.Errors() {
-				logger.Info("- " + err)
-			}
+		switch {
+		case file == "" && message == "":
+			return errors.New("no message provided to validate, please provide a message as a command line argument or use the --file flag to read from a file")
+		case message != "":
+			// The message is expected to be a JSON string in the format:
+			// '[2, "uniqueId", "BootNotification", {"chargePointVendor": "TestVendor", "chargePointModel": "TestModel"}]'
+			return service.ValidateMessage(message, version)
+		case file != "":
+			// Read the messages from the file
+			return service.ValidateFile(file, version)
 		}
 
 		return nil
@@ -187,6 +165,8 @@ func init() {
 	// Add flags for additional OCPP schemas folder
 	validate.Flags().StringVarP(&additionalOcppSchemasFolder, "schemas", "a", "", "Path to additional OCPP schemas folder")
 	validate.Flags().StringP("response-type", "r", "", "Response type to validate against (e.g. 'BootNotificationResponse'). Currently needed if you want to validate a single response message. ")
+	validate.Flags().StringP("file", "f", "", "Path to a file containing the OCPP message to validate. If this flag is set, the message will be read from the file instead of the command line argument.")
 
 	_ = viper.BindPFlag("response-type", validate.Flags().Lookup("response-type"))
+	_ = viper.BindPFlag("file", validate.Flags().Lookup("file"))
 }

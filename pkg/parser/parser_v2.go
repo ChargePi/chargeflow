@@ -2,19 +2,23 @@ package parser
 
 import (
 	"fmt"
-	"github.com/ChargePi/chargeflow/pkg/ocpp"
+
+	"github.com/spf13/viper"
+
 	"go.uber.org/zap"
+
+	"github.com/ChargePi/chargeflow/pkg/ocpp"
 )
 
 // ParserV2 is used for parsing multiple OCPP-J messages. It is stateful, as it will all results of the parsing process.
 // Particularly needed for parsing files that contain request-response pairs, where the response is dependent on the request.
-// It will return a map of unique IDs to RequestResponsePairResult, where RequestResponsePairResult is a struct that contains the parsed message and any errors that occurred during parsing.
+// It will return a map of unique IDs to RequestResponseResult, where RequestResponseResult is a struct that contains the parsed message and any errors that occurred during parsing.
 type ParserV2 struct {
 	logger *zap.Logger
 
 	// results is a collection of valid parsed messages, indexed by their unique ID.
 	// It contains both requests and responses (response can be a message response or an error response).
-	results map[string]RequestResponsePairResult
+	results map[string]RequestResponseResult
 
 	// nonParsable messages are messages that cannot proceed validation due to:
 	// - Invalid JSON format
@@ -26,83 +30,94 @@ type ParserV2 struct {
 func NewParserV2(logger *zap.Logger) *ParserV2 {
 	return &ParserV2{
 		logger:      logger.Named("file_parser"),
-		results:     make(map[string]RequestResponsePairResult),
+		results:     make(map[string]RequestResponseResult),
 		nonParsable: make(map[string]Result),
 	}
 }
 
-// Parse takes an array of OCPP-J messages and parses them. It returns a map of unique IDs to RequestResponsePairResult.
-func (fp *ParserV2) Parse(data []string) (map[string]RequestResponsePairResult, map[string]Result, error) {
+// Parse takes an array of OCPP-J messages and parses them. It returns a map of unique IDs to RequestResponseResult.
+func (fp *ParserV2) Parse(data []string) (map[string]RequestResponseResult, map[string]Result, error) {
 	if len(data) == 0 {
 		fp.logger.Info("No data to parse")
 		return fp.results, fp.nonParsable, nil
 	}
 
-	// Process each message, but dont crash if one fails to be parsed
+	// Process each message, but dont return an error if one fails to be parsed
 	for i, message := range data {
 		fp.logger.Info("Parsing message", zap.String("message", message))
-
-		result := NewResult()
 
 		// Parse the message as JSON
 		parsedMessage, err := ParseJsonMessage(message)
 		if err != nil {
 			fp.logger.Error("Failed to parse message", zap.String("message", message), zap.Error(err))
+			result := NewResult()
 			result.AddError("Message is not a valid OCPP message")
-			fp.nonParsable[fmt.Sprintf("line %d", i+1)] = *result
+			key := fmt.Sprintf("line %d", i+1)
+			fp.nonParsable[key] = *result
 			continue
 		}
 
 		// Actually parse the message
-		fp.parse(i+1, parsedMessage, result)
+		fp.parse(i+1, parsedMessage)
 	}
 
 	return fp.results, fp.nonParsable, nil
 }
 
 // Parses an OCPP-J message. The function expects an array of elements, as contained in the JSON message.
-func (fp *ParserV2) parse(index int, arr []interface{}, result *Result) {
+func (fp *ParserV2) parse(index int, arr []interface{}) {
+	result := NewResult()
+	line := fmt.Sprintf("line %d", index)
+
 	// Checking message fields
 	if len(arr) < 3 {
+		// Add to non-parsable messages if the message is too short
 		result.AddError(fmt.Sprintf("Expected at least 3 elements in the message, got %d", len(arr)))
+		fp.nonParsable[line] = *result
 		return
 	}
 
 	rawTypeId, ok := arr[0].(float64)
 	if !ok {
 		result.AddError("Expected first element to be a number (message type ID)")
+		fp.nonParsable[line] = *result
+		return
 	}
 
 	typeId := ocpp.MessageType(rawTypeId)
 	uniqueId, ok := arr[1].(string)
 	if !ok {
 		result.AddError("Expected second element to be a string (unique ID)")
+		fp.nonParsable[line] = *result
+		return
 	}
 
 	if uniqueId == "" {
 		// Add to non-parsable messages if the unique ID is missing
 		result.AddError("Unique ID is missing in the message")
 		// Replace the unique ID with the index of the message in the data array
-		uniqueId = fmt.Sprintf("line %d", index)
+		uniqueId = line
 	}
 
 	// Check if a result already exists for this message
 	if _, exists := fp.results[uniqueId]; !exists {
-		fp.results[uniqueId] = RequestResponsePairResult{}
+		fp.results[uniqueId] = RequestResponseResult{}
 	}
+
+	results := fp.results[uniqueId]
 
 	switch typeId {
 	case ocpp.CALL:
 		fp.logger.Debug("Message is of Request type")
 
 		if len(arr) != 4 {
-			result.AddError(fmt.Sprintf("Expected 4 elements in the message, got %d", len(arr)))
+			results.AddRequestError(fmt.Sprintf("Expected 4 elements in the message, got %d", len(arr)))
 			break
 		}
 
 		action, ok := arr[2].(string)
 		if !ok {
-			result.AddError("Expected third element to be a string (action)")
+			results.AddRequestError("Expected third element to be a string (action)")
 			break
 		}
 
@@ -113,33 +128,44 @@ func (fp *ParserV2) parse(index int, arr []interface{}, result *Result) {
 			Payload:       arr[3],
 		}
 
-		results := fp.results[uniqueId]
-		results.Request = &call
-		fp.results[uniqueId] = results
+		results.AddRequest(&call)
 	case ocpp.CALL_RESULT:
 		fp.logger.Debug("Message is of Response type")
 
+		// Check if response-type is set in global config
+		// Note: This can only be used in single message parsing, or if you have responses with the same type
+		action := viper.GetString("response-type")
+
 		// Check if we have a request with the same unique ID to determine the response type
 		existingResult, exist := fp.results[uniqueId]
-		if !exist || existingResult.Request == nil {
-			result.AddError("Unable to determine response type for message")
+		if !exist && action == "" {
+			results.AddResponseError("Unable to determine response type for message")
+			break
+		}
+
+		req, found := existingResult.GetRequest()
+		if found {
+			action = req.GetAction()
+		}
+
+		if action == "" {
+			// Nothing to do here, we will use the action from the request
 			break
 		}
 
 		callResult := ocpp.CallResult{
 			MessageTypeId: ocpp.CALL_RESULT,
 			UniqueId:      uniqueId,
-			Action:        existingResult.Request.GetAction(),
+			Action:        action,
 			Payload:       arr[2],
 		}
-		results := fp.results[uniqueId]
-		results.Response = &callResult
-		fp.results[uniqueId] = results
+
+		results.AddResponse(&callResult)
 	case ocpp.CALL_ERROR:
 		fp.logger.Debug("Message is of Error response type")
 
 		if len(arr) < 4 {
-			result.AddError("Invalid Call Error message. Expected array length >= 4, got " + fmt.Sprintf("%d", len(arr)))
+			results.AddResponseError("Invalid Call Error message. Expected array length >= 4, got " + fmt.Sprintf("%d", len(arr)))
 			break
 		}
 
@@ -150,7 +176,7 @@ func (fp *ParserV2) parse(index int, arr []interface{}, result *Result) {
 
 		rawErrorCode, ok := arr[2].(string)
 		if !ok {
-			result.AddError(fmt.Sprintf("Invalid element %v at 2, expected error code (string)", arr[2]))
+			results.AddResponseError(fmt.Sprintf("Invalid element %v at 2, expected error code (string)", arr[2]))
 		}
 
 		errorCode := ocpp.ErrorCode(rawErrorCode)
@@ -165,16 +191,15 @@ func (fp *ParserV2) parse(index int, arr []interface{}, result *Result) {
 			ErrorDescription: errorDescription,
 			ErrorDetails:     details,
 		}
-		results := fp.results[uniqueId]
-		results.Response = &callError
-		fp.results[uniqueId] = results
+
+		results.AddResponse(&callError)
 	default:
 		fp.logger.Error("Unknown message type", zap.Int("typeId", int(typeId)))
-		result.AddError("Unknown message type: " + fmt.Sprintf("%v", typeId))
+		result.AddError(fmt.Sprintf("Unknown message type: %d", typeId))
+		fp.nonParsable[uniqueId] = *result
+		return
 	}
 
-	// Store the result
-	results := fp.results[uniqueId]
-	results.Result = *result
+	// Store the results
 	fp.results[uniqueId] = results
 }
