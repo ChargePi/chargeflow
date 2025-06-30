@@ -99,15 +99,18 @@ func (fp *ParserV2) parse(index int, arr []interface{}) {
 		uniqueId = line
 	}
 
-	// Check if a result already exists for this message
-	if _, exists := fp.results[uniqueId]; !exists {
-		fp.results[uniqueId] = RequestResponseResult{}
-	}
-
-	results := fp.results[uniqueId]
-
 	switch typeId {
 	case ocpp.CALL:
+		// Check if a result already exists for this message
+		if _, exists := fp.results[uniqueId]; !exists {
+			fp.results[uniqueId] = RequestResponseResult{
+				Request:  *result,
+				Response: *NewResult(),
+			}
+		}
+
+		results := fp.results[uniqueId]
+
 		fp.logger.Debug("Message is of Request type")
 
 		if len(arr) != 4 {
@@ -129,7 +132,18 @@ func (fp *ParserV2) parse(index int, arr []interface{}) {
 		}
 
 		results.AddRequest(&call)
+		// Store the results
+		fp.results[uniqueId] = results
 	case ocpp.CALL_RESULT:
+		// Check if a result already exists for this message
+		if _, exists := fp.results[uniqueId]; !exists {
+			fp.results[uniqueId] = RequestResponseResult{
+				Request:  *NewResult(),
+				Response: *result,
+			}
+		}
+
+		results := fp.results[uniqueId]
 		fp.logger.Debug("Message is of Response type")
 
 		// Check if response-type is set in global config
@@ -161,7 +175,18 @@ func (fp *ParserV2) parse(index int, arr []interface{}) {
 		}
 
 		results.AddResponse(&callResult)
+		// Store the results
+		fp.results[uniqueId] = results
 	case ocpp.CALL_ERROR:
+		// Check if a result already exists for this message
+		if _, exists := fp.results[uniqueId]; !exists {
+			fp.results[uniqueId] = RequestResponseResult{
+				Request:  *NewResult(),
+				Response: *result,
+			}
+		}
+
+		results := fp.results[uniqueId]
 		fp.logger.Debug("Message is of Error response type")
 
 		if len(arr) < 4 {
@@ -193,13 +218,11 @@ func (fp *ParserV2) parse(index int, arr []interface{}) {
 		}
 
 		results.AddResponse(&callError)
+		// Store the results
+		fp.results[uniqueId] = results
 	default:
 		fp.logger.Error("Unknown message type", zap.Int("typeId", int(typeId)))
 		result.AddError(fmt.Sprintf("Unknown message type: %d", typeId))
 		fp.nonParsable[uniqueId] = *result
-		return
 	}
-
-	// Store the results
-	fp.results[uniqueId] = results
 }
