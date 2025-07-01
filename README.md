@@ -45,11 +45,14 @@ Usage:
   chargeflow validate [flags]
 
 Examples:
-chargeflow --version 1.6 validate '[1, "123456", "BootNotification", {"chargePointVendor": "TestVendor", "chargePointModel": "TestModel"}]'
+chargeflow --version 1.6 validate '[2, "123456", "BootNotification", {"chargePointVendor": "TestVendor", "chargePointModel": "TestModel"}]'
+chargeflow validate -f ./message.txt
 
 Flags:
-  -h, --help             help for validate
-  -a, --schemas string   Path to additional OCPP schemas folder
+  -f, --file string            Path to a file containing the OCPP message to validate. If this flag is set, the message will be read from the file instead of the command line argument.
+  -h, --help                   help for validate
+  -r, --response-type string   Response type to validate against (e.g. 'BootNotificationResponse'). Currently needed if you want to validate a single response message. 
+  -a, --schemas string         Path to additional OCPP schemas folder
 
 Global Flags:
   -d, --debug            Enable debug mode
@@ -59,7 +62,14 @@ Global Flags:
 ChargeFlow will automatically determine whether it's a request or response message. All you need to provide is a OCPP
 version!
 
+> [!NOTE]
+> If you want to validate a response message, you need to specify the response type using the `--response-type`
+> flag.
+
 Additionally, you can specify a custom path to vendor-specific OCPP schemas using the `--schemas` flag.
+
+> [!TIP]
+> You can now also validate multiple messages (both request and responses) from a file using the `-f` flag.
 
 ## License
 
