@@ -39,7 +39,8 @@ func NewService(
 
 // ValidateMessage validates a single OCPP message against the schema.
 func (s *Service) ValidateMessage(message string, ocppVersion ocpp.Version) error {
-	s.logger.Info("Validating message", zap.String("message", message), zap.String("ocppVersion", ocppVersion.String()))
+	logger := s.logger.With(zap.String("message", message), zap.String("ocppVersion", ocppVersion.String()))
+	logger.Info("Validating message")
 
 	validationReport, err := s.parseAndValidate(ocppVersion, []string{message})
 	if err != nil {
@@ -53,14 +54,15 @@ func (s *Service) ValidateMessage(message string, ocppVersion ocpp.Version) erro
 
 // ValidateFile validates a file containing multiple OCPP messages against the schema.
 func (s *Service) ValidateFile(file string, ocppVersion ocpp.Version) error {
-	s.logger.Info("Validating file", zap.String("file", file), zap.String("ocppVersion", ocppVersion.String()))
+	logger := s.logger.With(zap.String("file", file), zap.String("ocppVersion", ocppVersion.String()))
+	logger.Info("Validating file")
 
 	messages, err := s.getMessagesFromFile(file)
 	if err != nil {
 		return errors.Wrap(err, "unable to read messages from file")
 	}
 
-	s.logger.Info("✅ Successfully parsed file", zap.String("file", file), zap.Int("messages", len(messages)))
+	logger.Info("✅ Successfully parsed file", zap.Int("messages", len(messages)))
 
 	validationReport, err := s.parseAndValidate(ocppVersion, messages)
 	if err != nil {
@@ -76,28 +78,39 @@ func (s *Service) ValidateFile(file string, ocppVersion ocpp.Version) error {
 func (s *Service) outputValidationErrorToLogs(validationReport *report.Report) {
 	if len(validationReport.InvalidMessages) == 0 && len(validationReport.NonParsableMessages) == 0 {
 		s.logger.Info("✅ All messages are valid!")
+		return
 	}
 
 	// Log the non-parsable messages first
 	for line, errs := range validationReport.NonParsableMessages {
-		s.logger.Error(fmt.Sprintf("Message could not be parsed at %s:", line))
+		logger := s.logger.With(zap.String("line", line))
+		logger.Error(fmt.Sprintf("Message could not be parsed at %s:", line))
+		if len(errs) == 0 {
+			continue
+		}
+
 		for _, parseErr := range errs {
-			s.logger.Error(fmt.Sprintf("👉 %s", parseErr))
+			logger.Error(fmt.Sprintf("👉 %s", parseErr))
 		}
 	}
 
 	// Log any parsing or validation errors for messages
 	for messageId, requestResponse := range validationReport.InvalidMessages {
 		for k, validationErrors := range requestResponse {
+			logger := s.logger.With(zap.String("messageId", messageId))
 			switch k {
 			case "request":
-				s.logger.Error(fmt.Sprintf("Request for message %s has the following validation errors:", messageId))
+				logger.Error(fmt.Sprintf("Request for message %s has the following validation errors:", messageId))
 			case "response":
-				s.logger.Error(fmt.Sprintf("Response for message %s has the following validation errors:", messageId))
+				logger.Error(fmt.Sprintf("Response for message %s has the following validation errors:", messageId))
+			}
+
+			if len(validationErrors) == 0 {
+				continue
 			}
 
 			for _, parseErr := range validationErrors {
-				s.logger.Error(fmt.Sprintf("👉 %s", parseErr))
+				logger.Error(fmt.Sprintf("👉 %s", parseErr))
 			}
 		}
 	}
@@ -105,7 +118,8 @@ func (s *Service) outputValidationErrorToLogs(validationReport *report.Report) {
 
 // parseAndValidate parses and validates a list of OCPP messages.
 func (s *Service) parseAndValidate(ocppVersion ocpp.Version, messages []string) (*report.Report, error) {
-	s.logger.Info("Parsing and validating messages", zap.Int("messages", len(messages)), zap.String("ocppVersion", ocppVersion.String()))
+	logger := s.logger.With(zap.String("ocppVersion", ocppVersion.String()), zap.Int("messages", len(messages)))
+	logger.Info("Parsing and validating messages")
 
 	// Parse the messages
 	parserResults, nonParsedMessages, err := s.parser.Parse(messages)
@@ -135,9 +149,8 @@ func (s *Service) parseAndValidate(ocppVersion ocpp.Version, messages []string) 
 	// Only valid messages should be validated further
 	validMessages := s.filterValidMessages(parserResults)
 	invalidMessagesCount := len(parserResults) - len(validMessages)
-	s.logger.Info(
+	logger.Info(
 		"✅ OCPP messages parsed. Proceeding with validation.",
-		zap.Int("messages", len(validMessages)),
 		zap.Int("invalid_messages", invalidMessagesCount),
 		zap.Int("unparsable_messages", len(nonParsedMessages)),
 	)
@@ -174,6 +187,8 @@ func (s *Service) parseAndValidate(ocppVersion ocpp.Version, messages []string) 
 
 // getMessagesFromFile reads messages from a file, where each message is separated by a newline character.
 func (s *Service) getMessagesFromFile(file string) ([]string, error) {
+	s.logger.Debug("Reading file", zap.String("file", file))
+
 	openFile, err := os.OpenFile(file, os.O_RDONLY, 0666)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to open file")

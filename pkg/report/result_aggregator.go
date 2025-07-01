@@ -173,6 +173,7 @@ func (a *Aggregator) GetStatistics() Statistics {
 // Reset clears the aggregator's internal state
 func (a *Aggregator) Reset() {
 	a.logger.Debug("Resetting aggregator state")
+
 	a.results = make(map[string]map[string]Results)
 	a.nonParsableMessages = make(map[string][]string)
 	a.reportGenerated = false

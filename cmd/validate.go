@@ -142,9 +142,15 @@ var validate = &cobra.Command{
 		version := ocpp.Version(ocppVersion)
 
 		logger := zap.L()
+		logger = logger.WithOptions(zap.WithCaller(false), zap.AddStacktrace(zap.FatalLevel))
+
 		service := validation.NewService(logger, registry)
 
-		message := args[0]
+		var message string
+		if len(args) > 0 {
+			message = args[0]
+		}
+
 		switch {
 		case file == "" && message == "":
 			return errors.New("no message provided to validate, please provide a message as a command line argument or use the --file flag to read from a file")

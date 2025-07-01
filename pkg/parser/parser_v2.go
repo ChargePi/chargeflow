@@ -44,12 +44,16 @@ func (fp *ParserV2) Parse(data []string) (map[string]RequestResponseResult, map[
 
 	// Process each message, but dont return an error if one fails to be parsed
 	for i, message := range data {
-		fp.logger.Info("Parsing message", zap.String("message", message))
+		logger := fp.logger.With(
+			zap.String("message", message),
+			zap.Int("line", i+1),
+		)
+		logger.Info("Parsing message")
 
 		// Parse the message as JSON
 		parsedMessage, err := ParseJsonMessage(message)
 		if err != nil {
-			fp.logger.Error("Failed to parse message", zap.String("message", message), zap.Error(err))
+			logger.Error("Failed to parse message", zap.Error(err))
 			result := NewResult()
 			result.AddError("Message is not a valid OCPP message")
 			key := fmt.Sprintf("line %d", i+1)
