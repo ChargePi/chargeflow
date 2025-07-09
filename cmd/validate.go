@@ -50,7 +50,7 @@ func registerSchemas(logger *zap.Logger, embeddedDir embed.FS, version ocpp.Vers
 
 	dir, err := embeddedDir.ReadDir(dirPath)
 	if err != nil {
-		return errors.Wrap(err, "unable to read OCPP 1.6 schemas directory")
+		return errors.Wrapf(err, "unable to read OCPP schemas directory for version: %s", version.String())
 	}
 
 	for _, file := range dir {
