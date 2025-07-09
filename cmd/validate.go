@@ -33,6 +33,9 @@ var ocpp16Security embed.FS
 //go:embed schemas/ocpp_201/*
 var ocpp201Schemas embed.FS
 
+//go:embed schemas/ocpp_21/*
+var ocpp21Schemas embed.FS
+
 var additionalOcppSchemasFolder = ""
 
 // registerSchemas registers all schemas from the embedded filesystem for a specific OCPP version.
@@ -138,6 +141,11 @@ var validate = &cobra.Command{
 			}
 		case ocpp.V20.String():
 			err = registerSchemas(logger, ocpp201Schemas, ocpp.V20, registry)
+			if err != nil {
+				return err
+			}
+		case ocpp.V21.String():
+			err = registerSchemas(logger, ocpp21Schemas, ocpp.V21, registry)
 			if err != nil {
 				return err
 			}

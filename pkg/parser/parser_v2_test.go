@@ -110,12 +110,12 @@ func (s *parserSuite) TestParse() {
 		},
 		{
 			name:            "Invalid Message",
-			data:            []string{`[5,"1234", "InvalidMessage"]`},
+			data:            []string{`[13,"1234", "InvalidMessage"]`},
 			expectedResults: map[string]RequestResponseResult{},
 			expectedNonParsedMessages: map[string]Result{
 				"1234": {
 					isValid: false,
-					errors:  []string{"Unknown message type: 5"},
+					errors:  []string{"Unknown message type: 13"},
 				},
 			},
 			expectedErr: nil,
@@ -156,7 +156,7 @@ func (s *parserSuite) TestParse() {
 		{
 			name: "Mixed Valid and Invalid Messages",
 			data: []string{
-				`[5,"12345", "InvalidMessage"]`,
+				`[13,"12345", "InvalidMessage"]`,
 				`[2,"1234", "BootNotification", {"chargePointVendor": "TestVendor", "chargePointModel": "TestModel"}]`,
 				`[3,"1234", {"status": "Accepted"}]`,
 				`[2,"12344", "BootNotification", {"chargePointVendor": "TestVendor", "chargePointModel": "TestModel"}]`,
@@ -218,7 +218,7 @@ func (s *parserSuite) TestParse() {
 				},
 				"12345": {
 					isValid: false,
-					errors:  []string{"Unknown message type: 5"},
+					errors:  []string{"Unknown message type: 13"},
 				},
 			},
 			expectedErr: nil,
