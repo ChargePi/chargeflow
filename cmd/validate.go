@@ -27,6 +27,11 @@ var messageParser *parser.Parser
 //go:embed schemas/ocpp_16/*
 var ocpp16Schemas embed.FS
 
+// OCPP 1.6 Security Extension schemas
+//
+//go:embed schemas/ocpp_16_security/*
+var ocpp16Security embed.FS
+
 //go:embed schemas/ocpp_201/*
 var ocpp201Schemas embed.FS
 
@@ -37,6 +42,12 @@ func registerSchemas(logger *zap.Logger, embeddedDir embed.FS, version ocpp.Vers
 	logger.Debug("Registering OCPP schemas", zap.String("version", version.String()))
 
 	dirPath := "schemas/ocpp_" + strings.ReplaceAll(version.String(), ".", "")
+
+	// Exception for OCPP 1.6 Security Extension schemas
+	if embeddedDir == ocpp16Security {
+		dirPath = "schemas/ocpp_" + strings.ReplaceAll(version.String(), ".", "") + "_security"
+	}
+
 	dir, err := embeddedDir.ReadDir(dirPath)
 	if err != nil {
 		return errors.Wrap(err, "unable to read OCPP 1.6 schemas directory")
@@ -70,7 +81,6 @@ func registerSchemas(logger *zap.Logger, embeddedDir embed.FS, version ocpp.Vers
 
 // registerAdditionalSchemas registers additional OCPP schemas from a specified directory.
 // Files must be in JSON format and their names should match the OCPP message names (e.g. "BootNotificationRequest.json" or "BootNotificationResponse.json").
-
 func registerAdditionalSchemas(logger *zap.Logger, dir string) error {
 	ocppVersion := viper.GetString("ocpp.version")
 	logger.Debug("Registering additional OCPP schemas from directory", zap.String("directory", dir))
@@ -121,6 +131,11 @@ var validate = &cobra.Command{
 		switch ocppVersion {
 		case ocpp.V16.String():
 			err = registerSchemas(logger, ocpp16Schemas, ocpp.V16, registry)
+			if err != nil {
+				return err
+			}
+
+			err = registerSchemas(logger, ocpp16Security, ocpp.V16, registry)
 			if err != nil {
 				return err
 			}
