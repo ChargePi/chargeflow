@@ -46,6 +46,9 @@ type RequestResponseResult struct {
 
 	// Response can be either ocpp.CallResult or ocpp.CallError (or nil if no request was provided).
 	Response Result
+
+	// ResponseError
+	ResponseError Result
 }
 
 func NewRequestResponseResult() *RequestResponseResult {
@@ -63,12 +66,20 @@ func (r *RequestResponseResult) AddResponseError(err string) {
 	r.Response.AddError(err)
 }
 
+func (r *RequestResponseResult) AddResponseErrorError(err string) {
+	r.ResponseError.AddError(err)
+}
+
 func (r *RequestResponseResult) AddRequest(request ocpp.Message) {
 	r.Request.SetMessage(request)
 }
 
 func (r *RequestResponseResult) AddResponse(response ocpp.Message) {
 	r.Response.SetMessage(response)
+}
+
+func (r *RequestResponseResult) AddResponseErrorResult(response ocpp.Message) {
+	r.ResponseError.SetMessage(response)
 }
 
 func (r *RequestResponseResult) IsValid() bool {

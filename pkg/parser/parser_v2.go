@@ -224,6 +224,84 @@ func (fp *ParserV2) parse(index int, arr []interface{}) {
 		results.AddResponse(&callError)
 		// Store the results
 		fp.results[uniqueId] = results
+	case ocpp.CALL_RESULT_ERROR:
+		// Check if a result already exists for this message
+		if _, exists := fp.results[uniqueId]; !exists {
+			fp.results[uniqueId] = RequestResponseResult{
+				Request:       *NewResult(),
+				Response:      *NewResult(),
+				ResponseError: *result,
+			}
+		}
+
+		results := fp.results[uniqueId]
+		fp.logger.Debug("Message is of Call Result Error type")
+
+		if len(arr) < 4 {
+			results.AddResponseErrorError("Invalid Result Error message. Expected array length >= 4, got " + fmt.Sprintf("%d", len(arr)))
+			break
+		}
+
+		var details interface{}
+		if len(arr) > 4 {
+			details = arr[4]
+		}
+
+		rawErrorCode, ok := arr[2].(string)
+		if !ok {
+			results.AddResponseErrorError(fmt.Sprintf("Invalid element %v at 2, expected error code (string)", arr[2]))
+		}
+
+		errorCode := ocpp.ErrorCode(rawErrorCode)
+		errorDescription := ""
+		if v, ok := arr[3].(string); ok {
+			errorDescription = v
+		}
+		callError := ocpp.CallResultError{
+			MessageTypeId:    ocpp.CALL_RESULT_ERROR,
+			UniqueId:         uniqueId,
+			ErrorCode:        errorCode,
+			ErrorDescription: errorDescription,
+			ErrorDetails:     details,
+		}
+
+		results.AddResponseErrorResult(&callError)
+		// Store the results
+		fp.results[uniqueId] = results
+	case ocpp.SEND:
+		// Check if a result already exists for this message
+		if _, exists := fp.results[uniqueId]; !exists {
+			fp.results[uniqueId] = RequestResponseResult{
+				Request:  *result,
+				Response: *NewResult(), // No response for SEND messages
+			}
+		}
+
+		results := fp.results[uniqueId]
+
+		fp.logger.Debug("Message is of Send type")
+
+		if len(arr) != 4 {
+			results.AddRequestError(fmt.Sprintf("Expected 4 elements in the message, got %d", len(arr)))
+			break
+		}
+
+		action, ok := arr[2].(string)
+		if !ok {
+			results.AddRequestError("Expected third element to be a string (action)")
+			break
+		}
+
+		call := ocpp.Send{
+			MessageTypeId: ocpp.SEND,
+			UniqueId:      uniqueId,
+			Action:        action,
+			Payload:       arr[3],
+		}
+
+		results.AddRequest(&call)
+		// Store the results
+		fp.results[uniqueId] = results
 	default:
 		fp.logger.Error("Unknown message type", zap.Int("typeId", int(typeId)))
 		result.AddError(fmt.Sprintf("Unknown message type: %d", typeId))
