@@ -1,0 +1,54 @@
+# GoReleaser configuration file
+
+# General settings
+project_name: chargeflow
+builds:
+  - id: cli
+    main: ./main.go
+    binary: chargeflow
+    goos:
+      - freebsd
+      - windows
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+      - arm
+
+archives:
+  - id: cli-archive
+    format: tar.gz
+    files:
+      - LICENSE.md
+      - README.md
+
+dockers:
+  - image_templates:
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/chargeflow:{{ .Version }}"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/chargeflow:latest"
+    dockerfile: ./build/Dockerfile
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    use: buildx
+    build_flag_templates:
+      - "--pull"
+      - "--label=org.opencontainers.image.title=chargeflow"
+      - "--label=org.opencontainers.image.description=CLI tool for analyzing OCPP JSON messages"
+      - "--label=org.opencontainers.image.version={{ .Version }}"
+      - "--label=org.opencontainers.image.revision={{ .Commit }}"
+
+release:
+  github:
+    owner: ${{ .Env.GITHUB_REPOSITORY_OWNER }}
+    name: ${{ .Env.GITHUB_REPOSITORY_NAME }}
+    draft: false
+    prerelease: false
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '**/*.md'
+
