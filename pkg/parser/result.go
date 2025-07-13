@@ -93,3 +93,7 @@ func (r *RequestResponseResult) GetRequest() (ocpp.Message, bool) {
 func (r *RequestResponseResult) GetResponse() (ocpp.Message, bool) {
 	return r.Response.message, r.Response.message != nil
 }
+
+func (r *RequestResponseResult) GetResponseError() (ocpp.Message, bool) {
+	return r.ResponseError.message, r.ResponseError.message != nil
+}

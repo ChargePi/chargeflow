@@ -175,6 +175,19 @@ func (s *validatorTestSuite) TestValidateMessage_HappyPath() {
 			},
 			expected: NewValidationResult(),
 		},
+		{
+			name:          "Valid OCPP 2.1 SEND request",
+			setupRegistry: func(registry *mock_schema_registry.MockSchemaRegistry) {},
+			ocppVersion:   ocpp.V21,
+			message: &ocpp.CallError{
+				MessageTypeId:    ocpp.CALL_ERROR,
+				UniqueId:         uuid.NewString(),
+				ErrorCode:        ocpp.GenericError,
+				ErrorDescription: "An error occurred",
+				ErrorDetails:     nil,
+			},
+			expected: NewValidationResult(),
+		},
 	}
 
 	for _, tt := range tests {
@@ -331,6 +344,40 @@ func (s *validatorTestSuite) TestValidateMessage_UnhappyPath() {
 			expected: &ValidationResult{
 				isValid: false,
 				errors:  []string{"Invalid JSON format"},
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "Unsupported message (SEND) for ocpp version",
+			setupRegistry: func(registry *mock_schema_registry.MockSchemaRegistry) {
+			},
+			ocppVersion: ocpp.V16,
+			message: &ocpp.Send{
+				MessageTypeId: ocpp.SEND,
+				UniqueId:      uuid.NewString(),
+				Action:        "BootNotification",
+				Payload:       []byte("\"chargePointVendor\":\"Vendor\",\"chargePointModel\":\"Model\"}"),
+			},
+			expected: &ValidationResult{
+				isValid: false,
+				errors:  []string{"SEND messages are only supported in OCPP 2.1"},
+			},
+			expectedErr: nil,
+		},
+		{
+			name: "Unsupported message (CALL_RESULT_ERROR) for ocpp version",
+			setupRegistry: func(registry *mock_schema_registry.MockSchemaRegistry) {
+			},
+			ocppVersion: ocpp.V16,
+			message: &ocpp.CallResultError{
+				MessageTypeId:    ocpp.CALL_RESULT_ERROR,
+				UniqueId:         uuid.NewString(),
+				ErrorCode:        "GenericError",
+				ErrorDescription: "Error occurred",
+			},
+			expected: &ValidationResult{
+				isValid: false,
+				errors:  []string{"CALL_RESULT_ERROR messages are only supported in OCPP 2.1"},
 			},
 			expectedErr: nil,
 		},

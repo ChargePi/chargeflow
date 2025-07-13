@@ -108,8 +108,9 @@ func (fp *ParserV2) parse(index int, arr []interface{}) {
 		// Check if a result already exists for this message
 		if _, exists := fp.results[uniqueId]; !exists {
 			fp.results[uniqueId] = RequestResponseResult{
-				Request:  *result,
-				Response: *NewResult(),
+				Request:       *result,
+				Response:      *NewResult(),
+				ResponseError: *NewResult(),
 			}
 		}
 
@@ -142,8 +143,9 @@ func (fp *ParserV2) parse(index int, arr []interface{}) {
 		// Check if a result already exists for this message
 		if _, exists := fp.results[uniqueId]; !exists {
 			fp.results[uniqueId] = RequestResponseResult{
-				Request:  *NewResult(),
-				Response: *result,
+				Request:       *NewResult(),
+				Response:      *result,
+				ResponseError: *NewResult(),
 			}
 		}
 
@@ -272,8 +274,9 @@ func (fp *ParserV2) parse(index int, arr []interface{}) {
 		// Check if a result already exists for this message
 		if _, exists := fp.results[uniqueId]; !exists {
 			fp.results[uniqueId] = RequestResponseResult{
-				Request:  *result,
-				Response: *NewResult(), // No response for SEND messages
+				Request:       *result,
+				Response:      *NewResult(), // No response for SEND messages
+				ResponseError: *NewResult(),
 			}
 		}
 

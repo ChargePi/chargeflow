@@ -179,6 +179,17 @@ func (s *Service) parseAndValidate(ocppVersion ocpp.Version, messages []string) 
 			// Store the results in the aggregator
 			s.aggregator.AddValidationResults(messageId, false, *result)
 		}
+
+		responseError, found := parserResult.GetResponseError()
+		if found {
+			result, err := s.validator.ValidateMessage(ocppVersion, responseError)
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to validate response error message")
+			}
+
+			// Store the results in the aggregator
+			s.aggregator.AddValidationResults(messageId, false, *result)
+		}
 	}
 
 	validationReport := s.aggregator.CreateReport()
