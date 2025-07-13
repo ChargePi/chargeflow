@@ -55,6 +55,26 @@ func (v *Validator) ValidateMessage(ocppVersion ocpp.Version, message ocpp.Messa
 			return result, errors.Wrap(err, "unable to validate message payload")
 		}
 
+	case ocpp.SEND:
+		if ocppVersion != ocpp.V21 {
+			result.AddError("SEND messages are only supported in OCPP 2.1")
+			return result, nil
+		}
+
+		// Check if a message has an action
+		action := message.GetAction()
+		if action == "" {
+			result.AddError(actionEmptyErr)
+			break
+		}
+
+		// For CALL messages, the action must end with "Request"
+		action = action + "Request"
+
+		err := v.validatePayload(ocppVersion, payload, action, result)
+		if err != nil {
+			return result, errors.Wrap(err, "unable to validate message payload")
+		}
 	case ocpp.CALL_RESULT:
 		// Check if a message has an action
 		action := message.GetAction()
@@ -69,11 +89,27 @@ func (v *Validator) ValidateMessage(ocppVersion ocpp.Version, message ocpp.Messa
 		if err != nil {
 			return result, errors.Wrap(err, "unable to validate message payload")
 		}
-
 	case ocpp.CALL_ERROR:
 		// errors are not validated against schemas, so we skip validation for CALL_ERROR messages
 		// We will however validate the contents of the error message
 		callError, ok := message.(*ocpp.CallError)
+		if !ok {
+			return result, ErrCannotCastToCallError
+		}
+
+		// Validate the error code
+		if !ocpp.IsErrorCodeValid(callError.ErrorCode) {
+			result.AddError(fmt.Sprintf("invalid error code: %s", callError.ErrorCode))
+		}
+	case ocpp.CALL_RESULT_ERROR:
+		if ocppVersion != ocpp.V21 {
+			result.AddError("CALL_RESULT_ERROR messages are only supported in OCPP 2.1")
+			return result, nil
+		}
+
+		// errors are not validated against schemas, so we skip validation for CALL_ERROR messages
+		// We will however validate the contents of the error message
+		callError, ok := message.(*ocpp.CallResultError)
 		if !ok {
 			return result, ErrCannotCastToCallError
 		}

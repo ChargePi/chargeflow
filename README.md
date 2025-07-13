@@ -6,14 +6,13 @@ with various Charge Point Management Systems or Charge Point implementations.
 ## Features
 
 - [x] Parse Raw OCPP JSON messages
-- [x] Support for OCPP 1.6 and 2.0.1
+- [x] Support for OCPP 1.6, 2.0.1 and 2.1
 - [x] Request and Response payload validation
 - [x] Validate messages from a file
 
 ### Roadmap
 
 - [ ] Generate human-readable reports
-- [ ] Support for OCPP 2.1
 - [ ] Support for signed messages
 - [ ] Compatibility checks
 - [ ] Remote schema registry for vendors and models
@@ -56,7 +55,7 @@ Flags:
 
 Global Flags:
   -d, --debug            Enable debug mode
-  -v, --version string   OCPP version to use (1.6 or 2.0.1) (default "1.6")
+  -v, --version string   OCPP version to use (1.6, 2.0.1 or 2.1) (default "1.6")
 ```
 
 ChargeFlow will automatically determine whether it's a request or response message. All you need to provide is a OCPP

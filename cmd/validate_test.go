@@ -18,8 +18,14 @@ import (
 	"github.com/ChargePi/chargeflow/pkg/ocpp"
 )
 
-var validOcppRequest = "[2, \"1234567890\", \"Authorize\", {\"idTag\": \"1234567890\"}]"
-var validOcppResponse = "[3, \"1234567890\", {\"idTagInfo\": {\"status\": \"Accepted\"}}]"
+var (
+	validOcppRequest     = "[2, \"1234567890\", \"Authorize\", {\"idTag\": \"1234567890\"}]"
+	validOcppResponse    = "[3, \"1234567890\", {\"idTagInfo\": {\"status\": \"Accepted\"}}]"
+	validOcpp201Request  = "[2, \"1234567890\", \"Authorize\", {\"idTag\": \"1234567890\"}]"
+	validOcpp201Response = "[3, \"1234567890\", {\"idTagInfo\": {\"status\": \"Accepted\"}}]"
+	validOcpp21Request   = "[2, \"1234567890\", \"UsePriorityCharging\", {\"transactionId\": \"12345\", \"activate\": true}]"
+	validOcpp21Response  = "[3, \"1234567890\", {\"status\": \"NoProfile\"}]"
+)
 
 func Test_registerAdditionalSchemas(t *testing.T) {
 	logger := zap.L()
@@ -107,6 +113,36 @@ func Test_Validate(t *testing.T) {
 			},
 		},
 		{
+			name: "OCPP 2.0.1 Request",
+			args: []string{validOcpp201Request},
+			flags: map[string]string{
+				"version": ocpp.V20.String(),
+			},
+		},
+		{
+			name: "OCPP 2.0.1 Response",
+			args: []string{validOcpp201Response},
+			flags: map[string]string{
+				"response-type": "Authorize",
+				"version":       ocpp.V20.String(),
+			},
+		},
+		{
+			name: "OCPP 2.1 Request",
+			args: []string{validOcpp21Request},
+			flags: map[string]string{
+				"version": ocpp.V21.String(),
+			},
+		},
+		{
+			name: "OCPP 2.1 Response",
+			args: []string{validOcpp21Response},
+			flags: map[string]string{
+				"response-type": "UsePriorityCharging",
+				"version":       ocpp.V21.String(),
+			},
+		},
+		{
 			name:  "Invalid OCPP message",
 			args:  []string{"{\"invalid\": \"message\"}"},
 			flags: map[string]string{},
@@ -115,7 +151,7 @@ func Test_Validate(t *testing.T) {
 			name: "Invalid OCPP version",
 			args: []string{validOcppRequest},
 			flags: map[string]string{
-				"ocpp-version": "invalid_version",
+				"version": "invalid_version",
 			},
 		},
 		{

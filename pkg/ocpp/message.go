@@ -4,9 +4,11 @@ package ocpp
 type MessageType int
 
 const (
-	CALL        MessageType = 2
-	CALL_RESULT MessageType = 3
-	CALL_ERROR  MessageType = 4
+	CALL              MessageType = 2
+	CALL_RESULT       MessageType = 3
+	CALL_ERROR        MessageType = 4
+	CALL_RESULT_ERROR MessageType = 5
+	SEND              MessageType = 6
 )
 
 // An OCPP-J message.
@@ -92,6 +94,61 @@ func (callError *CallError) GetPayload() interface{} {
 }
 
 func (callError *CallError) GetAction() string {
+	return string(callError.ErrorCode)
+}
+
+// -------------------- Send --------------------
+
+// An OCPP-J SEND message, containing an OCPP Request.
+type Send struct {
+	Message       `validate:"-"`
+	MessageTypeId MessageType `json:"messageTypeId" validate:"required,eq=6"`
+	UniqueId      string      `json:"uniqueId" validate:"required,max=36"`
+	Action        string      `json:"action" validate:"required,max=36"`
+	Payload       interface{} `json:"payload" validate:"required"`
+}
+
+func (send *Send) GetMessageTypeId() MessageType {
+	return send.MessageTypeId
+}
+
+func (send *Send) GetUniqueId() string {
+	return send.UniqueId
+}
+
+func (send *Send) GetAction() string {
+	return send.Action
+}
+
+func (send *Send) GetPayload() interface{} {
+	return send.Payload
+}
+
+// -------------------- Call Result Error --------------------
+
+// An OCPP-J CallResultError message, containing an OCPP Result Error.
+type CallResultError struct {
+	Message
+	MessageTypeId    MessageType `json:"messageTypeId" validate:"required,eq=5"`
+	UniqueId         string      `json:"uniqueId" validate:"required,max=36"`
+	ErrorCode        ErrorCode   `json:"errorCode" validate:"errorCode"`
+	ErrorDescription string      `json:"errorDescription" validate:"omitempty,max=255"`
+	ErrorDetails     interface{} `json:"errorDetails" validate:"omitempty"`
+}
+
+func (callError *CallResultError) GetMessageTypeId() MessageType {
+	return callError.MessageTypeId
+}
+
+func (callError *CallResultError) GetUniqueId() string {
+	return callError.UniqueId
+}
+
+func (callError *CallResultError) GetPayload() interface{} {
+	return callError.ErrorDetails
+}
+
+func (callError *CallResultError) GetAction() string {
 	return string(callError.ErrorCode)
 }
 
