@@ -1,0 +1,48 @@
+# GoReleaser configuration file
+
+# General settings
+project_name: chargeflow
+builds:
+  - id: cli
+    main: ./main.go
+    binary: chargeflow
+    goos:
+      - freebsd
+      - windows
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+      - arm
+
+archives:
+  - id: cli-archive
+    format: tar.gz
+    files:
+      - chargepi
+      - LICENSE
+      - README.md
+
+dockers:
+  - image_templates:
+      - "ghcr.io/${{ .Env.GITHUB_REPOSITORY_OWNER }}/chargeflow:{{ .Version }}"
+      - "ghcr.io/${{ .Env.GITHUB_REPOSITORY_OWNER }}/chargeflow:latest"
+    dockerfile: ./build/Dockerfile
+    platforms:
+      - linux/amd64
+      - linux/arm64
+
+release:
+  github:
+    owner: ${{ .Env.GITHUB_REPOSITORY_OWNER }}
+    name: ${{ .Env.GITHUB_REPOSITORY_NAME }}
+    draft: false
+    prerelease: false
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '**/*.md'
+
