@@ -9,6 +9,7 @@ type Report struct {
 	// InvalidMessages contains all the errors per message (request or response)
 	InvalidMessages     map[string]map[string][]string `json:"invalid_messages"`
 	NonParsableMessages map[string][]string            `json:"non_parsable_messages"`
+	Statistics          Statistics                     `json:"statistics"`
 }
 
 type Results struct {

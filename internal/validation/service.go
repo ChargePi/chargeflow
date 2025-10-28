@@ -3,6 +3,7 @@ package validation
 import (
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"strings"
 
@@ -48,30 +49,86 @@ func (s *Service) ValidateMessage(message string, ocppVersion ocpp.Version) erro
 	}
 
 	s.outputValidationErrorToLogs(validationReport)
+	return nil
+}
+
+// ValidateMessageWithReport validates the message and returns the generated report.
+// This is used by the CLI when an output file path is requested.
+func (s *Service) ValidateMessageWithReport(message string, ocppVersion ocpp.Version) (*report.Report, error) {
+	_, _ = s.logger, ocppVersion
+	validationReport, err := s.parseAndValidate(ocppVersion, []string{message})
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to parse message")
+	}
+
+	s.outputValidationErrorToLogs(validationReport)
+	return validationReport, nil
+}
+
+// ValidateFile validates a file containing multiple OCPP messages against the schema.
+// It accepts optional Option(s). If an output option is provided, the report
+// will be written using a strategy based on the output file extension.
+// If no options are provided, behavior is unchanged and results are logged to console.
+func (s *Service) ValidateFile(file string, ocppVersion ocpp.Version, opts ...Option) error {
+	logger := s.logger.With(zap.String("file", file), zap.String("ocppVersion", ocppVersion.String()))
+	logger.Info("Validating file")
+
+	// apply options
+	fo := &options{}
+	for _, opt := range opts {
+		opt(fo)
+	}
+
+	msgs, err := s.getMessagesFromFile(file)
+	if err != nil {
+		return errors.Wrap(err, "unable to read messages from file")
+	}
+
+	// Use existing helper to parse and validate and get report
+	validationReport, err := s.parseAndValidate(ocppVersion, msgs)
+	if err != nil {
+		return errors.Wrap(err, "unable to parse messages")
+	}
+
+	// If no output provided, preserve original behavior: log errors to console
+	if fo.output == "" {
+		s.outputValidationErrorToLogs(validationReport)
+		return nil
+	}
+
+	// Otherwise create strategy and write to file
+	strat, err := outputStrategyFactory(fo.output)
+	if err != nil {
+		return err
+	}
+
+	if err := strat.Write(fo.output, validationReport); err != nil {
+		return errors.Wrap(err, "failed to write validation report")
+	}
 
 	return nil
 }
 
-// ValidateFile validates a file containing multiple OCPP messages against the schema.
-func (s *Service) ValidateFile(file string, ocppVersion ocpp.Version) error {
+// ValidateFileWithReport validates the file and returns the generated report.
+// This is used by the CLI when an output file path is requested.
+func (s *Service) ValidateFileWithReport(file string, ocppVersion ocpp.Version) (*report.Report, error) {
 	logger := s.logger.With(zap.String("file", file), zap.String("ocppVersion", ocppVersion.String()))
 	logger.Info("Validating file")
 
 	messages, err := s.getMessagesFromFile(file)
 	if err != nil {
-		return errors.Wrap(err, "unable to read messages from file")
+		return nil, errors.Wrap(err, "unable to read messages from file")
 	}
 
 	logger.Info("✅ Successfully parsed file", zap.Int("messages", len(messages)))
 
 	validationReport, err := s.parseAndValidate(ocppVersion, messages)
 	if err != nil {
-		return errors.Wrap(err, "unable to parse messages")
+		return nil, errors.Wrap(err, "unable to parse messages")
 	}
 
 	s.outputValidationErrorToLogs(validationReport)
-
-	return nil
+	return validationReport, nil
 }
 
 // outputValidationErrorToLogs outputs the validation errors to the logs.
@@ -216,14 +273,9 @@ func (s *Service) getMessagesFromFile(file string) ([]string, error) {
 
 // filterValidMessages filters out invalid messages from the parser results.
 func (s *Service) filterValidMessages(parserResults map[string]parser.RequestResponseResult) map[string]parser.RequestResponseResult {
-	validMessages := make(map[string]parser.RequestResponseResult)
+	maps.DeleteFunc(parserResults, func(messageUniqueId string, parserResult parser.RequestResponseResult) bool {
+		return !parserResult.IsValid()
+	})
 
-	for messageUniqueId, parserResult := range parserResults {
-		if !parserResult.IsValid() {
-			continue
-		}
-		validMessages[messageUniqueId] = parserResult
-	}
-
-	return validMessages
+	return parserResults
 }
