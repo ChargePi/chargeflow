@@ -36,6 +36,7 @@ func TestJSONStrategy_Write(t *testing.T) {
 	var out map[string]interface{}
 	require.NoError(t, json.Unmarshal(b, &out))
 
-	require.Contains(t, out, "report")
+	require.Contains(t, out, "invalid_messages")
+	require.Contains(t, out, "non_parsable_messages")
 	require.Contains(t, out, "statistics")
 }
