@@ -11,15 +11,7 @@ import (
 type jsonStrategy struct{}
 
 func (jsonStrategy) Write(path string, r *report.Report) error {
-	out := struct {
-		Report     *report.Report    `json:"report"`
-		Statistics report.Statistics `json:"statistics"`
-	}{
-		Report:     r,
-		Statistics: r.Statistics,
-	}
-
-	b, err := json.MarshalIndent(out, "", "  ")
+	b, err := json.MarshalIndent(r, "", "  ")
 	if err != nil {
 		return err
 	}
