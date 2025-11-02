@@ -135,6 +135,12 @@ func (a *Aggregator) CreateReport() Report {
 		}
 	}
 
+	// Store UnparsableMessages count in stats
+	a.stats.UnparsableMessages = len(a.nonParsableMessages)
+
+	// Attach statistics to the report
+	report.Statistics = a.stats
+
 	// Store the report in the aggregator
 	a.report = report
 
@@ -165,6 +171,7 @@ func (a *Aggregator) GetStatistics() Statistics {
 				}
 			}
 		}
+		a.stats.UnparsableMessages = len(a.nonParsableMessages)
 	}
 
 	return a.stats

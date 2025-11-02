@@ -38,6 +38,9 @@ var ocpp21Schemas embed.FS
 
 var additionalOcppSchemasFolder = ""
 
+// supportedOutputFormats lists allowed output file formats for the CLI report writer.
+var supportedOutputFormats = map[string]bool{".json": true, ".csv": true, ".txt": true}
+
 // registerSchemas registers all schemas from the embedded filesystem for a specific OCPP version.
 func registerSchemas(logger *zap.Logger, embeddedDir embed.FS, version ocpp.Version, registry schema_registry.SchemaRegistry) error {
 	logger.Debug("Registering OCPP schemas", zap.String("version", version.String()))
@@ -175,16 +178,43 @@ var validate = &cobra.Command{
 			message = args[0]
 		}
 
+		output := viper.GetString("output")
+
+		// Validate provided output extension if present
+		if output != "" {
+			ext := strings.ToLower(filepath.Ext(output))
+			if !supportedOutputFormats[ext] {
+				return errors.Errorf("unsupported output format '%s', supported: .json, .csv, .txt", ext)
+			}
+		}
+
+		validationOpts := []validation.Option{}
+		if output != "" {
+			validationOpts = append(validationOpts, validation.WithOutput(output))
+		}
+
 		switch {
 		case file == "" && message == "":
 			return errors.New("no message provided to validate, please provide a message as a command line argument or use the --file flag to read from a file")
 		case message != "":
 			// The message is expected to be a JSON string in the format:
 			// '[2, "uniqueId", "BootNotification", {"chargePointVendor": "TestVendor", "chargePointModel": "TestModel"}]'
-			return service.ValidateMessage(message, version)
+			if output == "" {
+				return service.ValidateMessage(message, version)
+			}
+
+			// Validate and write report
+			r, err := service.ValidateMessageWithReport(message, version)
+			if err != nil {
+				return err
+			}
+
+			return validation.WriteReport(output, r)
+
 		case file != "":
+			// Use the options pattern to write output using registered strategies
 			// Read the messages from the file
-			return service.ValidateFile(file, version)
+			return service.ValidateFile(file, version, validationOpts...)
 		}
 
 		return nil
@@ -196,7 +226,9 @@ func init() {
 	validate.Flags().StringVarP(&additionalOcppSchemasFolder, "schemas", "a", "", "Path to additional OCPP schemas folder")
 	validate.Flags().StringP("response-type", "r", "", "Response type to validate against (e.g. 'BootNotificationResponse'). Currently needed if you want to validate a single response message. ")
 	validate.Flags().StringP("file", "f", "", "Path to a file containing the OCPP message to validate. If this flag is set, the message will be read from the file instead of the command line argument.")
+	validate.Flags().StringP("output", "o", "", "Path to write validation report. Supports .json, .csv and .txt extensions.")
 
 	_ = viper.BindPFlag("response-type", validate.Flags().Lookup("response-type"))
 	_ = viper.BindPFlag("file", validate.Flags().Lookup("file"))
+	_ = viper.BindPFlag("output", validate.Flags().Lookup("output"))
 }

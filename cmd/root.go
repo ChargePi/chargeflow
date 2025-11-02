@@ -42,7 +42,7 @@ func setDefaults() {
 
 func rootFlags() {
 	// Add flag for OCPP version
-	rootCmd.PersistentFlags().StringP("version", "v", ocpp.V16.String(), "OCPP version to use (1.6 or 2.0.1)")
+	rootCmd.PersistentFlags().StringP("version", "v", ocpp.V16.String(), "OCPP version to use (1.6, 2.0.1 or 2.1)")
 	rootCmd.PersistentFlags().BoolP("debug", "d", false, "Enable debug mode")
 
 	_ = viper.BindPFlag("ocpp.version", rootCmd.PersistentFlags().Lookup("version"))
