@@ -9,10 +9,10 @@ with various Charge Point Management Systems or Charge Point implementations.
 - [x] Support for OCPP 1.6, 2.0.1 and 2.1
 - [x] Request and Response payload validation
 - [x] Validate messages from a file
+- [x] Generate human-readable reports
 
 ### Roadmap
 
-- [ ] Generate human-readable reports
 - [ ] Support for signed messages
 - [ ] Compatibility checks
 - [ ] Remote schema registry for vendors and models
