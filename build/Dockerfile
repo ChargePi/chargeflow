@@ -15,7 +15,7 @@ RUN go mod verify
 # Copy the rest of the source code
 COPY . .
 
-RUN --mount=type=cache,target="/root/.cache/go-build" go build -o ./chargeflow ./cmd
+RUN --mount=type=cache,target="/root/.cache/go-build" go build -o ./chargeflow .
 
 FROM debian:buster-slim as app
 
