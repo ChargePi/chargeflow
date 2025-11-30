@@ -42,5 +42,5 @@ changelog:
   sort: asc
   filters:
     exclude:
-      - '**/*.md'
+      - '.*\.md$'
 
