@@ -26,8 +26,10 @@ archives:
 
 dockers_v2:
   - images:
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/chargeflow:{{ .Version }}"
-      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/chargeflow:latest"
+      - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/chargeflow"
+    tags:
+      - "{{ .Tag }}"
+      - "latest"
     dockerfile: ./build/Dockerfile
     platforms:
       - linux/amd64
