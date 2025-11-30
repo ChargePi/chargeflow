@@ -2,20 +2,18 @@ package cmd
 
 import (
 	"embed"
-	"os"
 	"path/filepath"
 	"strings"
 
-	"github.com/ChargePi/chargeflow/internal/validation"
-
-	"github.com/spf13/viper"
-
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"go.uber.org/zap"
 
+	"github.com/ChargePi/chargeflow/internal/validation"
 	"github.com/ChargePi/chargeflow/pkg/ocpp"
 	"github.com/ChargePi/chargeflow/pkg/schema_registry"
+	"github.com/ChargePi/chargeflow/pkg/schema_registry/registries"
 )
 
 var (
@@ -87,39 +85,6 @@ func registerSchemas(logger *zap.Logger, embeddedDir embed.FS, version ocpp.Vers
 	return nil
 }
 
-// registerAdditionalSchemas registers additional OCPP schemas from a specified directory.
-// Files must be in JSON format and their names should match the OCPP message names (e.g. "BootNotificationRequest.json" or "BootNotificationResponse.json").
-func registerAdditionalSchemas(logger *zap.Logger, dir string) error {
-	ocppVersion := viper.GetString("ocpp.version")
-	logger.Debug("Registering additional OCPP schemas from directory", zap.String("directory", dir))
-
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return errors.Wrap(err, "unable to read provided additional OCPP schemas directory")
-	}
-
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			fileName := entry.Name()
-			// Read the schema file
-			schema, err := os.ReadFile(filepath.Join(dir, fileName))
-			if err != nil {
-				return errors.Wrap(err, "unable to read additional OCPP schemas directory")
-			}
-
-			// Read the directory and register additional OCPP schemas
-			// Any existing schema with the same name will be overwritten
-			action, _ := strings.CutSuffix(fileName, ".json")
-			err = registry.RegisterSchema(ocpp.Version(ocppVersion), action, schema, schema_registry.WithOverwrite(true))
-			if err != nil {
-				return errors.Wrap(err, "failed to register additional OCPP schemas")
-			}
-		}
-	}
-
-	return nil
-}
-
 var validate = &cobra.Command{
 	Use:          "validate",
 	Short:        "Validate the OCPP message(s) against the registered OCPP schemas",
@@ -130,8 +95,18 @@ var validate = &cobra.Command{
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		ocppVersion := viper.GetString("ocpp.version")
 		logger := zap.L()
+		registryType := viper.GetString("schema.registry.type")
 
-		registry = schema_registry.NewInMemorySchemaRegistry(logger)
+		overwrite := additionalOcppSchemasFolder != ""
+
+		// todo provision registries based on config
+		switch registryType {
+		default:
+			registry = registries.NewFileSchemaRegistry(
+				logger,
+				registries.WithOverwrite(overwrite),
+			)
+		}
 
 		// Populate the schema registry with OCPP schemas
 		var err error
@@ -158,8 +133,10 @@ var validate = &cobra.Command{
 			}
 		}
 
-		if additionalOcppSchemasFolder != "" {
-			err := registerAdditionalSchemas(logger, additionalOcppSchemasFolder)
+		if overwrite {
+			ocppVersion := viper.GetString("ocpp.version")
+			version := ocpp.Version(ocppVersion)
+			err := registerSchemasFromDir(logger, registry, version, additionalOcppSchemasFolder)
 			if err != nil {
 				return err
 			}

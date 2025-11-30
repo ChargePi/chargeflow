@@ -130,6 +130,13 @@ func (v *Validator) validatePayload(ocppVersion ocpp.Version, payload interface{
 		return nil
 	}
 
+	switch v.registry.Type() {
+	case "remote":
+		// For remote, we can validate the payload against the schema directly
+	case "local":
+
+	}
+
 	// Get the schema for the action and OCPP version
 	schema, found := v.registry.GetSchema(ocppVersion, action)
 	if !found {
