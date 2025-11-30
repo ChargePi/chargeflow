@@ -1,4 +1,5 @@
 # GoReleaser configuration file
+version: 2
 
 # General settings
 project_name: chargeflow
@@ -23,28 +24,19 @@ archives:
       - LICENSE.md
       - README.md
 
-dockers:
-  - image_templates:
+dockers_v2:
+  - images:
       - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/chargeflow:{{ .Version }}"
       - "ghcr.io/{{ .Env.GITHUB_REPOSITORY_OWNER }}/chargeflow:latest"
     dockerfile: ./build/Dockerfile
     platforms:
       - linux/amd64
       - linux/arm64
-    use: buildx
-    build_flag_templates:
-      - "--pull"
-      - "--label=org.opencontainers.image.title=chargeflow"
-      - "--label=org.opencontainers.image.description=CLI tool for analyzing OCPP JSON messages"
-      - "--label=org.opencontainers.image.version={{ .Version }}"
-      - "--label=org.opencontainers.image.revision={{ .Commit }}"
 
 release:
   github:
     owner: ${{ .Env.GITHUB_REPOSITORY_OWNER }}
-    name: ${{ .Env.GITHUB_REPOSITORY_NAME }}
-    draft: false
-    prerelease: false
+    name: chargeflow
 
 changelog:
   sort: asc
