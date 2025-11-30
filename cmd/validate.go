@@ -18,28 +18,32 @@ import (
 	"github.com/ChargePi/chargeflow/pkg/schema_registry"
 )
 
-var registry schema_registry.SchemaRegistry
+var (
+	registry schema_registry.SchemaRegistry
 
-// OCPP 1.6 schemas
-//
-//go:embed schemas/ocpp_16/*
-var ocpp16Schemas embed.FS
+	// OCPP 1.6 schemas
+	//
+	//go:embed schemas/ocpp_16/*
+	ocpp16Schemas embed.FS
 
-// OCPP 1.6 Security Extension schemas
-//
-//go:embed schemas/ocpp_16_security/*
-var ocpp16Security embed.FS
+	// OCPP 1.6 Security Extension schemas
+	//
+	//go:embed schemas/ocpp_16_security/*
+	ocpp16Security embed.FS
 
-//go:embed schemas/ocpp_201/*
-var ocpp201Schemas embed.FS
+	//go:embed schemas/ocpp_201/*
+	ocpp201Schemas embed.FS
 
-//go:embed schemas/ocpp_21/*
-var ocpp21Schemas embed.FS
+	//go:embed schemas/ocpp_21/*
+	ocpp21Schemas embed.FS
+)
 
-var additionalOcppSchemasFolder = ""
+var (
+	additionalOcppSchemasFolder = ""
 
-// supportedOutputFormats lists allowed output file formats for the CLI report writer.
-var supportedOutputFormats = map[string]bool{".json": true, ".csv": true, ".txt": true}
+	// supportedOutputFormats lists allowed output file formats for the CLI report writer.
+	supportedOutputFormats = map[string]bool{".json": true, ".csv": true, ".txt": true}
+)
 
 // registerSchemas registers all schemas from the embedded filesystem for a specific OCPP version.
 func registerSchemas(logger *zap.Logger, embeddedDir embed.FS, version ocpp.Version, registry schema_registry.SchemaRegistry) error {
@@ -179,6 +183,7 @@ var validate = &cobra.Command{
 		}
 
 		output := viper.GetString("output")
+		validationOpts := []validation.Option{}
 
 		// Validate provided output extension if present
 		if output != "" {
@@ -186,10 +191,7 @@ var validate = &cobra.Command{
 			if !supportedOutputFormats[ext] {
 				return errors.Errorf("unsupported output format '%s', supported: .json, .csv, .txt", ext)
 			}
-		}
 
-		validationOpts := []validation.Option{}
-		if output != "" {
 			validationOpts = append(validationOpts, validation.WithOutput(output))
 		}
 
