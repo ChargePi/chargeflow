@@ -1,0 +1,8 @@
+package: schemaregistryclient
+output: ./client.go
+generate:
+  models: true
+  client: true
+output-options:
+  # to make sure that all types are generated
+  skip-prune: true
