@@ -371,32 +371,17 @@ func (r *RemoteSchemaRegistry) RegisterSchema(ocppVersion ocpp.Version, action s
 		return errors.Wrapf(err, "failed to normalize schema JSON for subject %s", subject)
 	}
 
-	// Validate the normalized JSON is still valid by compiling it again
-	_, err = r.compiler.Compile(normalizedBytes)
-	if err != nil {
-		logger.Error("Normalized schema validation failed",
-			zap.Error(err),
-			zap.String("normalizedSchema", string(normalizedBytes)),
-			zap.String("originalSchema", string(rawSchema)))
-		return errors.Wrapf(err, "normalized schema is invalid JSON Schema for subject %s", subject)
-	}
-
 	// The schema must be sent as a JSON string
 	// Convert normalized bytes to string - this is raw JSON without any escaping
 	// json.Marshal will properly escape this string when serializing the request body
 	schemaStr := string(normalizedBytes)
 
-	schemaPreview := schemaStr
-	if len(schemaPreview) > 100 {
-		schemaPreview = schemaPreview[:100] + "..."
-	}
 	logger.Debug("Schema string prepared for registration",
 		zap.String("subject", subject),
-		zap.Int("schemaLength", len(schemaStr)),
-		zap.String("schemaPreview", schemaPreview))
+		zap.Int("schemaLength", len(schemaStr)))
 
 	// Create the request payload
-	schemaType := "JSONSCHEMA"
+	schemaType := "JSON"
 	payload := map[string]interface{}{
 		"schema":     schemaStr,
 		"schemaType": schemaType,
