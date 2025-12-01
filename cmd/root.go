@@ -32,6 +32,7 @@ var rootCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(validate)
+	rootCmd.AddCommand(register)
 }
 
 // setDefaults sets the default values for the configuration.

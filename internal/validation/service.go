@@ -55,7 +55,6 @@ func (s *Service) ValidateMessage(message string, ocppVersion ocpp.Version) erro
 // ValidateMessageWithReport validates the message and returns the generated report.
 // This is used by the CLI when an output file path is requested.
 func (s *Service) ValidateMessageWithReport(message string, ocppVersion ocpp.Version) (*report.Report, error) {
-	_, _ = s.logger, ocppVersion
 	validationReport, err := s.parseAndValidate(ocppVersion, []string{message})
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to parse message")
