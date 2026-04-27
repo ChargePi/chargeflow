@@ -107,13 +107,13 @@ var validate = &cobra.Command{
 		ocppVersion := viper.GetString("ocpp.version")
 		logger := zap.L()
 		registryType := viper.GetString("schema.registry.type")
-		url := viper.GetString("schema.registry.url")
 
 		overwrite := additionalOcppSchemasFolder != ""
 
 		var err error
 		switch registryType {
 		case "remote":
+			url := viper.GetString("schema.registry.url")
 			registry, err = remote_registry.NewRemoteSchemaRegistry(url, logger)
 			if err != nil {
 				return err
