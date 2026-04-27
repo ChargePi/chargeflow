@@ -419,6 +419,117 @@ func (s *remoteRegistryIntegrationTestSuite) TestGetSchema_ResponseSuffix() {
 	s.NotNil(schema, "Response schema should not be nil")
 }
 
+func (s *remoteRegistryIntegrationTestSuite) TestDeleteSchema() {
+	ctx := context.Background()
+	registry, err := NewRemoteSchemaRegistry(s.registryURL, s.logger, WithTimeout(10*time.Second))
+	s.Require().NoError(err)
+
+	validSchema := json.RawMessage(bootNotificationSchema)
+
+	tests := []struct {
+		name        string
+		setup       func()
+		ocppVersion ocpp.Version
+		action      string
+		expectError bool
+	}{
+		{
+			name: "Delete existing schema",
+			setup: func() {
+				err := registry.RegisterSchema(ctx, ocpp.V16, "MeterValuesRequest", validSchema)
+				s.Require().NoError(err)
+			},
+			ocppVersion: ocpp.V16,
+			action:      "MeterValuesRequest",
+			expectError: false,
+		},
+		{
+			name:        "Delete non-existent schema",
+			ocppVersion: ocpp.V16,
+			action:      "NonExistentRequest",
+			expectError: true,
+		},
+		{
+			name:        "Invalid OCPP version",
+			ocppVersion: ocpp.Version("unsupported"),
+			action:      "MeterValuesRequest",
+			expectError: true,
+		},
+		{
+			name:        "Invalid action suffix",
+			ocppVersion: ocpp.V16,
+			action:      "MeterValues",
+			expectError: true,
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			if tt.setup != nil {
+				tt.setup()
+			}
+
+			err := registry.DeleteSchema(ctx, tt.ocppVersion, tt.action)
+			if tt.expectError {
+				s.Error(err)
+			} else {
+				s.NoError(err)
+			}
+		})
+	}
+}
+
+func (s *remoteRegistryIntegrationTestSuite) TestDeleteSchema_CacheInvalidation() {
+	ctx := context.Background()
+	registry, err := NewRemoteSchemaRegistry(
+		s.registryURL,
+		s.logger,
+		WithTimeout(10*time.Second),
+		WithCacheRefreshDuration(5*time.Minute),
+	)
+	s.Require().NoError(err)
+
+	validSchema := json.RawMessage(authorizationReqSchema)
+
+	err = registry.RegisterSchema(ctx, ocpp.V16, "DataTransferRequest", validSchema)
+	s.Require().NoError(err)
+
+	schema, found := registry.GetSchema(ctx, ocpp.V16, "DataTransferRequest")
+	s.True(found, "schema should be found after registration")
+	s.NotNil(schema)
+
+	err = registry.DeleteSchema(ctx, ocpp.V16, "DataTransferRequest")
+	s.Require().NoError(err)
+
+	_, found = registry.GetSchema(ctx, ocpp.V16, "DataTransferRequest")
+	s.False(found, "schema should not be found after deletion — cache must be invalidated")
+}
+
+func (s *remoteRegistryIntegrationTestSuite) TestRegisterAndDeleteLifecycle() {
+	ctx := context.Background()
+	registry, err := NewRemoteSchemaRegistry(s.registryURL, s.logger, WithTimeout(10*time.Second))
+	s.Require().NoError(err)
+
+	validSchema := json.RawMessage(bootNotificationSchema)
+
+	err = registry.RegisterSchema(ctx, ocpp.V16, "ClearCacheRequest", validSchema)
+	s.Require().NoError(err)
+
+	schema, found := registry.GetSchema(ctx, ocpp.V16, "ClearCacheRequest")
+	s.True(found, "schema should be retrievable after registration")
+	s.NotNil(schema)
+
+	err = registry.DeleteSchema(ctx, ocpp.V16, "ClearCacheRequest")
+	s.Require().NoError(err)
+
+	_, found = registry.GetSchema(ctx, ocpp.V16, "ClearCacheRequest")
+	s.False(found, "schema should not be retrievable after deletion")
+
+	// Re-registration after deletion must succeed
+	err = registry.RegisterSchema(ctx, ocpp.V16, "ClearCacheRequest", validSchema)
+	s.NoError(err)
+}
+
 func TestRemoteRegistryIntegration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")

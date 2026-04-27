@@ -215,6 +215,88 @@ func (s *fileRegistryTestSuite) TestOptions() {
 	}
 }
 
+func (s *fileRegistryTestSuite) TestDeleteSchema() {
+	ctx := context.Background()
+	schema := json.RawMessage(`{ "$schema": "http://json-schema.org/draft-04/schema#", "id": "urn:OCPP:1.6:2019:12:AuthorizeRequest", "title": "AuthorizeRequest", "type": "object", "properties": { "idTag": { "type": "string", "maxLength": 20 } }, "additionalProperties": false, "required": [ "idTag" ]}`)
+
+	tests := []struct {
+		name         string
+		preconfigure func(registry *SchemaRegistry)
+		ocppVersion  ocpp.Version
+		action       string
+		expectedErr  error
+	}{
+		{
+			name: "Delete existing schema",
+			preconfigure: func(registry *SchemaRegistry) {
+				_ = registry.RegisterSchema(ctx, ocpp.V16, "AuthorizeRequest", schema)
+			},
+			ocppVersion: ocpp.V16,
+			action:      "AuthorizeRequest",
+			expectedErr: nil,
+		},
+		{
+			name:        "Unsupported OCPP version",
+			ocppVersion: ocpp.Version("unsupported"),
+			action:      "AuthorizeRequest",
+			expectedErr: errors.New("invalid OCPP version: unsupported"),
+		},
+		{
+			name:        "No schemas registered for OCPP version",
+			ocppVersion: ocpp.V16,
+			action:      "AuthorizeRequest",
+			expectedErr: errors.New("no schemas registered for OCPP version 1.6"),
+		},
+		{
+			name: "Schema not found for action",
+			preconfigure: func(registry *SchemaRegistry) {
+				_ = registry.RegisterSchema(ctx, ocpp.V16, "AuthorizeRequest", schema)
+			},
+			ocppVersion: ocpp.V16,
+			action:      "BootNotificationRequest",
+			expectedErr: errors.New("schema for action BootNotificationRequest not found for OCPP version 1.6"),
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			registry := NewFileSchemaRegistry(s.logger)
+			if tt.preconfigure != nil {
+				tt.preconfigure(registry)
+			}
+
+			err := registry.DeleteSchema(ctx, tt.ocppVersion, tt.action)
+			if tt.expectedErr != nil {
+				s.ErrorContains(err, tt.expectedErr.Error())
+			} else {
+				s.NoError(err)
+			}
+		})
+	}
+}
+
+func (s *fileRegistryTestSuite) TestRegisterAndDeleteLifecycle() {
+	ctx := context.Background()
+	registry := NewFileSchemaRegistry(s.logger)
+	schema := json.RawMessage(`{ "$schema": "http://json-schema.org/draft-04/schema#", "id": "urn:OCPP:1.6:2019:12:AuthorizeRequest", "title": "AuthorizeRequest", "type": "object", "properties": { "idTag": { "type": "string", "maxLength": 20 } }, "additionalProperties": false, "required": [ "idTag" ]}`)
+
+	err := registry.RegisterSchema(ctx, ocpp.V16, "AuthorizeRequest", schema)
+	s.Require().NoError(err)
+
+	_, found := registry.GetSchema(ctx, ocpp.V16, "AuthorizeRequest")
+	s.True(found, "schema should be retrievable after registration")
+
+	err = registry.DeleteSchema(ctx, ocpp.V16, "AuthorizeRequest")
+	s.Require().NoError(err)
+
+	_, found = registry.GetSchema(ctx, ocpp.V16, "AuthorizeRequest")
+	s.False(found, "schema should not be retrievable after deletion")
+
+	// Re-registration after deletion must succeed (no duplicate conflict)
+	err = registry.RegisterSchema(ctx, ocpp.V16, "AuthorizeRequest", schema)
+	s.NoError(err)
+}
+
 func TestInMemoryRegistry(t *testing.T) {
 	suite.Run(t, new(fileRegistryTestSuite))
 }
