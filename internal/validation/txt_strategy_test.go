@@ -27,7 +27,7 @@ func TestTXTStrategy_Write(t *testing.T) {
 		Statistics:          report.Statistics{ValidRequests: 0, InvalidRequests: 0, ValidResponses: 0, InvalidResponses: 1, UnparsableMessages: 1},
 	}
 
-	s := txtStrategy{}
+	s := txtWriter{}
 	require.NoError(t, s.Write(path, r))
 
 	b, err := os.ReadFile(path)

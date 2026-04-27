@@ -34,9 +34,9 @@ func TestOutputStrategyFactory(t *testing.T) {
 			case ".json":
 				require.IsType(t, jsonStrategy{}, strat)
 			case ".csv":
-				require.IsType(t, csvStrategy{}, strat)
+				require.IsType(t, csvWriter{}, strat)
 			case ".txt":
-				require.IsType(t, txtStrategy{}, strat)
+				require.IsType(t, txtWriter{}, strat)
 			}
 		})
 	}

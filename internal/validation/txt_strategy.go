@@ -1,6 +1,7 @@
 package validation
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -8,10 +9,13 @@ import (
 	"github.com/ChargePi/chargeflow/pkg/report"
 )
 
-// txtStrategy implements OutputStrategy for plain text output.
-type txtStrategy struct{}
+// txtWriter implements ReportWriter for plain text output.
+type txtWriter struct{}
 
-func (txtStrategy) Write(path string, r *report.Report) error {
+func (txtWriter) Write(path string, r *report.Report) error {
+	if r == nil {
+		return errors.New("report is nil")
+	}
 	var b strings.Builder
 
 	stats := r.Statistics
