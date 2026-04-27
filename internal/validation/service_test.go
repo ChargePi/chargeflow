@@ -265,6 +265,8 @@ func (s *validationServiceTestSuite) TestValidateFile() {
 			setExpectations: func(registry *mock_schema_registry.MockSchemaRegistry) {
 				compile, err := jsonschema.NewCompiler().Compile(bootNotificationSchema)
 				s.Require().NoError(err)
+
+				registry.EXPECT().Type().Return("file")
 				registry.EXPECT().GetSchema(mock.Anything, ocpp.V16, "BootNotificationRequest").Return(compile, true)
 
 				compile, err = jsonschema.NewCompiler().Compile(bootNotificationResponseSchema)
@@ -280,6 +282,8 @@ func (s *validationServiceTestSuite) TestValidateFile() {
 			setExpectations: func(registry *mock_schema_registry.MockSchemaRegistry) {
 				compile, err := jsonschema.NewCompiler().Compile(costUpdatedSchema)
 				s.Require().NoError(err)
+
+				registry.EXPECT().Type().Return("file")
 				registry.EXPECT().GetSchema(mock.Anything, ocpp.V20, "CostUpdatedRequest").Return(compile, true)
 
 				compile, err = jsonschema.NewCompiler().Compile(costUpdatedResponseSchema)
@@ -293,6 +297,7 @@ func (s *validationServiceTestSuite) TestValidateFile() {
 			filepath: s.files["ocpp201_all_valid"].path,
 			version:  "ocpp.V99",
 			setExpectations: func(registry *mock_schema_registry.MockSchemaRegistry) {
+				registry.EXPECT().Type().Return("file")
 				registry.EXPECT().GetSchema(mock.Anything, ocpp.Version("ocpp.V99"), mock.Anything).Return(nil, false)
 			},
 			expectedErr: errors.New("no schema found for action CostUpdatedRequest in OCPP version ocpp.V99"),
@@ -347,6 +352,7 @@ func (s *validationServiceTestSuite) TestValidateMessage() {
 			setExpectations: func(registry *mock_schema_registry.MockSchemaRegistry) {
 				compile, err := jsonschema.NewCompiler().Compile(bootNotificationSchema)
 				s.Require().NoError(err)
+				registry.EXPECT().Type().Return("file")
 				registry.EXPECT().GetSchema(mock.Anything, ocpp.V16, "BootNotificationRequest").Return(compile, true)
 			},
 			expectedErr: nil,
@@ -358,6 +364,7 @@ func (s *validationServiceTestSuite) TestValidateMessage() {
 			setExpectations: func(registry *mock_schema_registry.MockSchemaRegistry) {
 				compile, err := jsonschema.NewCompiler().Compile(costUpdatedSchema)
 				s.Require().NoError(err)
+				registry.EXPECT().Type().Return("file")
 				registry.EXPECT().GetSchema(mock.Anything, ocpp.V20, "CostUpdatedRequest").Return(compile, true)
 			},
 			expectedErr: nil,
