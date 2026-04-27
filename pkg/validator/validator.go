@@ -69,7 +69,7 @@ func (v *Validator) ValidateMessage(ocppVersion ocpp.Version, message ocpp.Messa
 			break
 		}
 
-		// For CALL messages, the action must end with "Request"
+		// For SEND messages, the action must end with "Request"
 		action = action + "Request"
 
 		err := v.validatePayload(ocppVersion, payload, action, result)
