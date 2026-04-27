@@ -121,6 +121,7 @@ func (s *validatorTestSuite) TestValidateMessage_HappyPath() {
 				schemaFromCompiler, err := s.compiler.Compile(schema)
 				s.Require().NoError(err)
 				registry.EXPECT().GetSchema(mock.Anything, ocpp.V20, "BootNotificationRequest").Return(schemaFromCompiler, true)
+				registry.EXPECT().Type().Return("file")
 			},
 			ocppVersion: ocpp.V20,
 			message: &ocpp.Call{
@@ -137,6 +138,7 @@ func (s *validatorTestSuite) TestValidateMessage_HappyPath() {
 				schemaFromCompiler, err := s.compiler.Compile(schema)
 				s.Require().NoError(err)
 				registry.EXPECT().GetSchema(mock.Anything, ocpp.V16, "BootNotificationRequest").Return(schemaFromCompiler, true)
+				registry.EXPECT().Type().Return("file")
 			},
 			ocppVersion: ocpp.V16,
 			message: &ocpp.Call{
@@ -152,6 +154,7 @@ func (s *validatorTestSuite) TestValidateMessage_HappyPath() {
 			setupRegistry: func(registry *mock_schema_registry.MockSchemaRegistry) {
 				schemaFromCompiler, err := s.compiler.Compile(responseSchema)
 				s.Require().NoError(err)
+				registry.EXPECT().Type().Return("file")
 				registry.EXPECT().GetSchema(mock.Anything, ocpp.V20, "BootNotificationResponse").Return(schemaFromCompiler, true)
 			},
 			ocppVersion: ocpp.V20,
@@ -222,6 +225,7 @@ func (s *validatorTestSuite) TestValidateMessage_UnhappyPath() {
 				schemaFromCompiler, err := s.compiler.Compile(schema)
 				s.Require().NoError(err)
 				registry.EXPECT().GetSchema(mock.Anything, ocpp.V16, "BootNotificationRequest").Return(schemaFromCompiler, true)
+				registry.EXPECT().Type().Return("file")
 			},
 			ocppVersion: ocpp.V16,
 			message: &ocpp.Call{
@@ -314,6 +318,7 @@ func (s *validatorTestSuite) TestValidateMessage_UnhappyPath() {
 			name: "No registered schema for request",
 			setupRegistry: func(registry *mock_schema_registry.MockSchemaRegistry) {
 				registry.EXPECT().GetSchema(mock.Anything, ocpp.V16, "BootNotificationRequest").Return(nil, false)
+				registry.EXPECT().Type().Return("file")
 			},
 			ocppVersion: ocpp.V16,
 			message: &ocpp.Call{
@@ -333,6 +338,7 @@ func (s *validatorTestSuite) TestValidateMessage_UnhappyPath() {
 			setupRegistry: func(registry *mock_schema_registry.MockSchemaRegistry) {
 				schemaFromCompiler, err := s.compiler.Compile(schema)
 				s.Require().NoError(err)
+				registry.EXPECT().Type().Return("file")
 				registry.EXPECT().GetSchema(mock.Anything, ocpp.V16, "BootNotificationRequest").Return(schemaFromCompiler, true)
 			},
 			ocppVersion: ocpp.V16,

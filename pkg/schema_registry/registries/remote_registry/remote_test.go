@@ -563,7 +563,7 @@ func TestAuthOptions(t *testing.T) {
 		{
 			name: "API Key with default header",
 			opts: []Options{
-				WithAPIKey("test-api-key", ""),
+				WithAPIKey("test-api-key", "X-API-Key"),
 			},
 			expectedHeader: "X-API-Key",
 			expectedValue:  "test-api-key",
@@ -589,16 +589,18 @@ func TestAuthOptions(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create a config and apply options
-			config := remoteRegistryConfig{
-				auth: authConfig{authType: authTypeNone},
-			}
+			config := remoteRegistryConfig{}
 			for _, opt := range tt.opts {
 				opt(&config)
 			}
 
-			// Create a test request
+			registry, err := NewRemoteSchemaRegistry("http://example.com", zap.NewNop(), tt.opts...)
+			assert.NoError(t, err)
+
 			req, err := http.NewRequest("GET", "http://example.com/test", nil)
 			assert.NoError(t, err)
+
+			registry.applyAuthHeaders(req)
 
 			// Verify the header was set correctly
 			actualValue := req.Header.Get(tt.expectedHeader)
