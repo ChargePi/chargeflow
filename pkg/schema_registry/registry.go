@@ -11,6 +11,7 @@ import (
 
 type SchemaRegistry interface {
 	RegisterSchema(ctx context.Context, ocppVersion ocpp.Version, action string, rawSchema json.RawMessage) error
+	DeleteSchema(ctx context.Context, ocppVersion ocpp.Version, action string) error
 	GetSchema(ctx context.Context, ocppVersion ocpp.Version, action string) (*jsonschema.Schema, bool)
 	Type() string
 }

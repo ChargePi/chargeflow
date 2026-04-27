@@ -1,4 +1,4 @@
-package remote
+package remote_registry
 
 type authConfig struct {
 	authType          authType

@@ -1,4 +1,4 @@
-package remote
+package remote_registry
 
 import (
 	"context"

@@ -11,7 +11,8 @@ import (
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 
-	"github.com/ChargePi/chargeflow/pkg/schema_registry/registries/file"
+	"github.com/ChargePi/chargeflow/pkg/schema_registry/registries/file_registry"
+	"github.com/ChargePi/chargeflow/pkg/schema_registry/registries/remote_registry"
 
 	"github.com/ChargePi/chargeflow/internal/validation"
 	"github.com/ChargePi/chargeflow/pkg/ocpp"
@@ -106,23 +107,27 @@ var validate = &cobra.Command{
 		ocppVersion := viper.GetString("ocpp.version")
 		logger := zap.L()
 		registryType := viper.GetString("schema.registry.type")
+		url := viper.GetString("schema.registry.url")
 
 		overwrite := additionalOcppSchemasFolder != ""
 
-		// todo provision registries based on config
+		var err error
 		switch registryType {
 		case "remote":
-			// remote.NewRemoteSchemaRegistry()
+			registry, err = remote_registry.NewRemoteSchemaRegistry(url, logger)
+			if err != nil {
+				return err
+			}
 		default:
-			registry = file.NewFileSchemaRegistry(
+			registry = file_registry.NewFileSchemaRegistry(
 				logger,
-				file.WithOverwrite(overwrite),
+				file_registry.WithOverwrite(overwrite),
 			)
 		}
 
 		// Populate the schema registry with OCPP schemas
 		ctx := cmd.Context()
-		var err error
+
 		switch ocppVersion {
 		case ocpp.V16.String():
 			err = registerSchemas(ctx, logger, ocpp16Schemas, ocpp.V16, registry)
@@ -149,7 +154,7 @@ var validate = &cobra.Command{
 		if overwrite {
 			ocppVersion := viper.GetString("ocpp.version")
 			version := ocpp.Version(ocppVersion)
-			err := registerSchemasFromDir(ctx, logger, registry, version, additionalOcppSchemasFolder)
+			err = registerSchemasFromDir(ctx, logger, registry, version, additionalOcppSchemasFolder)
 			if err != nil {
 				return err
 			}

@@ -1,4 +1,4 @@
-package file
+package file_registry
 
 type fileRegistryOptions struct {
 	// Whether to allow overwriting existing schemasPerOcppVersion in the registry or not.

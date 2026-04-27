@@ -1,4 +1,4 @@
-package remote
+package remote_registry
 
 import (
 	"bytes"
@@ -18,7 +18,7 @@ import (
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 
-	"github.com/ChargePi/chargeflow/pkg/schema_registry/registries/file"
+	"github.com/ChargePi/chargeflow/pkg/schema_registry/registries/file_registry"
 
 	"github.com/ChargePi/chargeflow/pkg/ocpp"
 )
@@ -246,7 +246,7 @@ func (r *SchemaRegistry) RegisterSchema(ctx context.Context, ocppVersion ocpp.Ve
 	}
 
 	// Must be a valid action name ending with "Request" or "Response"
-	if !(strings.HasSuffix(action, file.RequestSuffix) || strings.HasSuffix(action, file.ResponseSuffix)) {
+	if !(strings.HasSuffix(action, "Request") || strings.HasSuffix(action, "Response")) {
 		return errors.Errorf("action must end with 'Request' or 'Response': %s", action)
 	}
 
@@ -335,6 +335,60 @@ func (r *SchemaRegistry) RegisterSchema(ctx context.Context, ocppVersion ocpp.Ve
 	return nil
 }
 
+func (r *SchemaRegistry) DeleteSchema(ctx context.Context, ocppVersion ocpp.Version, action string) error {
+	logger := r.logger.With(zap.String("ocppVersion", ocppVersion.String()), zap.String("action", action))
+	logger.Debug("Deleting schema from remote registry")
+
+	if !ocpp.IsValidProtocolVersion(ocppVersion) {
+		return errors.Errorf("invalid OCPP version: %s", ocppVersion)
+	}
+
+	if !(strings.HasSuffix(action, file_registry.RequestSuffix) || strings.HasSuffix(action, file_registry.ResponseSuffix)) {
+		return errors.Errorf("action must end with 'Request' or 'Response': %s", action)
+	}
+
+	subject := buildSubjectName(ocppVersion, action)
+
+	ctx, cancel := context.WithTimeout(ctx, r.config.timeout)
+	defer cancel()
+
+	path := fmt.Sprintf("subjects/%s", url.PathEscape(subject))
+	resp, err := r.doRequest(ctx, http.MethodDelete, path, nil)
+	if err != nil {
+		return errors.Wrapf(err, "failed to delete schema for subject %s", subject)
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return errors.Wrapf(err, "failed to read response body for subject %s", subject)
+	}
+
+	switch resp.StatusCode {
+	case http.StatusOK:
+		// Success
+	case http.StatusNotFound:
+		return errors.Errorf("schema not found for subject %s", subject)
+	case http.StatusUnprocessableEntity:
+		var errorResponse struct {
+			Message string `json:"message"`
+		}
+		if err := json.Unmarshal(bodyBytes, &errorResponse); err == nil && errorResponse.Message != "" {
+			return errors.Errorf("cannot delete schema for subject %s: %s", subject, errorResponse.Message)
+		}
+		return errors.Errorf("cannot delete schema for subject %s", subject)
+	case http.StatusInternalServerError:
+		return errors.Errorf("internal server error when deleting schema for subject %s", subject)
+	default:
+		return errors.Errorf("unexpected status code %d when deleting schema for subject %s", resp.StatusCode, subject)
+	}
+
+	r.cache.Delete(ctx, ocppVersion, action)
+
+	logger.Debug("Successfully deleted schema from remote registry")
+	return nil
+}
+
 func (r *SchemaRegistry) GetSchema(ctx context.Context, ocppVersion ocpp.Version, action string) (*jsonschema.Schema, bool) {
 	logger := r.logger.With(zap.String("ocppVersion", ocppVersion.String()), zap.String("action", action))
 	logger.Debug("Getting schema")
@@ -346,7 +400,7 @@ func (r *SchemaRegistry) GetSchema(ctx context.Context, ocppVersion ocpp.Version
 	}
 
 	// Must be a valid action name ending with "Request" or "Response"
-	if !(strings.HasSuffix(action, file.RequestSuffix) || strings.HasSuffix(action, file.ResponseSuffix)) {
+	if !(strings.HasSuffix(action, "Request") || strings.HasSuffix(action, "Response")) {
 		logger.Warn("Invalid action name")
 		return nil, false
 	}

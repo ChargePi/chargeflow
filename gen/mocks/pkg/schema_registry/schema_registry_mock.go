@@ -40,6 +40,69 @@ func (_m *MockSchemaRegistry) EXPECT() *MockSchemaRegistry_Expecter {
 	return &MockSchemaRegistry_Expecter{mock: &_m.Mock}
 }
 
+// DeleteSchema provides a mock function for the type MockSchemaRegistry
+func (_mock *MockSchemaRegistry) DeleteSchema(ctx context.Context, ocppVersion ocpp.Version, action string) error {
+	ret := _mock.Called(ctx, ocppVersion, action)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteSchema")
+	}
+
+	var r0 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, ocpp.Version, string) error); ok {
+		r0 = returnFunc(ctx, ocppVersion, action)
+	} else {
+		r0 = ret.Error(0)
+	}
+	return r0
+}
+
+// MockSchemaRegistry_DeleteSchema_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteSchema'
+type MockSchemaRegistry_DeleteSchema_Call struct {
+	*mock.Call
+}
+
+// DeleteSchema is a helper method to define mock.On call
+//   - ctx context.Context
+//   - ocppVersion ocpp.Version
+//   - action string
+func (_e *MockSchemaRegistry_Expecter) DeleteSchema(ctx interface{}, ocppVersion interface{}, action interface{}) *MockSchemaRegistry_DeleteSchema_Call {
+	return &MockSchemaRegistry_DeleteSchema_Call{Call: _e.mock.On("DeleteSchema", ctx, ocppVersion, action)}
+}
+
+func (_c *MockSchemaRegistry_DeleteSchema_Call) Run(run func(ctx context.Context, ocppVersion ocpp.Version, action string)) *MockSchemaRegistry_DeleteSchema_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 ocpp.Version
+		if args[1] != nil {
+			arg1 = args[1].(ocpp.Version)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
+		}
+		run(
+			arg0,
+			arg1,
+			arg2,
+		)
+	})
+	return _c
+}
+
+func (_c *MockSchemaRegistry_DeleteSchema_Call) Return(err error) *MockSchemaRegistry_DeleteSchema_Call {
+	_c.Call.Return(err)
+	return _c
+}
+
+func (_c *MockSchemaRegistry_DeleteSchema_Call) RunAndReturn(run func(ctx context.Context, ocppVersion ocpp.Version, action string) error) *MockSchemaRegistry_DeleteSchema_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GetSchema provides a mock function for the type MockSchemaRegistry
 func (_mock *MockSchemaRegistry) GetSchema(ctx context.Context, ocppVersion ocpp.Version, action string) (*jsonschema.Schema, bool) {
 	ret := _mock.Called(ctx, ocppVersion, action)

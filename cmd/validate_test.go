@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/ChargePi/chargeflow/pkg/schema_registry/registries/file"
-
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 
@@ -30,7 +28,7 @@ var (
 
 func Test_registerAdditionalSchemas(t *testing.T) {
 	logger := zap.L()
-	registry = file.NewFileSchemaRegistry(logger)
+	registry = file_registry.NewFileSchemaRegistry(logger)
 
 	tests := []struct {
 		name               string

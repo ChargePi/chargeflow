@@ -1,4 +1,4 @@
-package file
+package file_registry
 
 import (
 	"context"
@@ -99,6 +99,31 @@ func (fsr *SchemaRegistry) RegisterSchema(_ context.Context, ocppVersion ocpp.Ve
 	// Register the schema for the specific action
 	fsr.schemasPerOcppVersion[ocppVersion][action] = schema
 
+	return nil
+}
+
+// DeleteSchema removes a schema for a specific OCPP version and action.
+func (fsr *SchemaRegistry) DeleteSchema(_ context.Context, ocppVersion ocpp.Version, action string) error {
+	logger := fsr.logger.With(zap.String("ocppVersion", ocppVersion.String()), zap.String("action", action))
+	logger.Debug("Deleting schema")
+
+	if !ocpp.IsValidProtocolVersion(ocppVersion) {
+		return errors.Errorf("invalid OCPP version: %s", ocppVersion)
+	}
+
+	fsr.mu.Lock()
+	defer fsr.mu.Unlock()
+
+	schemas, exists := fsr.schemasPerOcppVersion[ocppVersion]
+	if !exists {
+		return errors.Errorf("no schemas registered for OCPP version %s", ocppVersion)
+	}
+
+	if _, exists := schemas[action]; !exists {
+		return errors.Errorf("schema for action %s not found for OCPP version %s", action, ocppVersion)
+	}
+
+	delete(schemas, action)
 	return nil
 }
 
