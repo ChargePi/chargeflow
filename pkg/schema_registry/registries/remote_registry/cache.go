@@ -4,13 +4,11 @@ import (
 	"context"
 
 	"github.com/kaptinlin/jsonschema"
-
-	"github.com/ChargePi/chargeflow/pkg/ocpp"
 )
 
-// Cache stores compiled schemas fetched from the remote registry.
+// Cache stores compiled schemas fetched from the remote registry, keyed by subject name.
 type Cache interface {
-	Get(ctx context.Context, version ocpp.Version, action string) (*jsonschema.Schema, bool)
-	Set(ctx context.Context, version ocpp.Version, action string, schema *jsonschema.Schema)
-	Delete(ctx context.Context, version ocpp.Version, action string)
+	Get(ctx context.Context, subject string) (*jsonschema.Schema, bool)
+	Set(ctx context.Context, subject string, schema *jsonschema.Schema)
+	Delete(ctx context.Context, subject string)
 }

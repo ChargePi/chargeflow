@@ -15,6 +15,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/ChargePi/chargeflow/pkg/ocpp"
+	"github.com/ChargePi/chargeflow/pkg/schema_registry"
 )
 
 const bootNotificationSchema = `{
@@ -161,7 +162,11 @@ func (s *remoteRegistryIntegrationTestSuite) TestRegisterSchema() {
 
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
-			err := registry.RegisterSchema(ctx, tt.ocppVersion, tt.action, tt.schema)
+			err := registry.RegisterSchema(ctx, schema_registry.CreateSchemaRequest{
+				OcppContext: ocpp.OcppContext{Version: tt.ocppVersion},
+				Action:      tt.action,
+				Schema:      tt.schema,
+			})
 			if tt.expectError {
 				s.Error(err)
 			} else {
@@ -183,20 +188,20 @@ func (s *remoteRegistryIntegrationTestSuite) TestGetSchema() {
 	validSchema := json.RawMessage(authorizationReqSchema)
 
 	// First register a schema
-	err = registry.RegisterSchema(ctx, ocpp.V16, "AuthorizeRequest", validSchema)
+	err = registry.RegisterSchema(ctx, schema_registry.CreateSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Action: "AuthorizeRequest", Schema: validSchema})
 	s.Require().NoError(err)
 
 	// Test getting the schema
-	schema, found := registry.GetSchema(ctx, ocpp.V16, "AuthorizeRequest")
+	schema, found := registry.GetSchema(ctx, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Action: "AuthorizeRequest"})
 	s.True(found, "Schema should be found")
 	s.NotNil(schema, "Schema should not be nil")
 
 	// Test getting non-existent schema
-	_, found = registry.GetSchema(ctx, ocpp.V16, "NonExistentRequest")
+	_, found = registry.GetSchema(ctx, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Action: "NonExistentRequest"})
 	s.False(found, "Non-existent schema should not be found")
 
 	// Test getting schema for non-existent OCPP version
-	_, found = registry.GetSchema(ctx, ocpp.V20, "AuthorizeRequest")
+	_, found = registry.GetSchema(ctx, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V20}, Action: "AuthorizeRequest"})
 	s.False(found, "Schema for different OCPP version should not be found")
 }
 
@@ -216,16 +221,16 @@ func (s *remoteRegistryIntegrationTestSuite) TestGetSchema_Caching() {
 	validSchema := json.RawMessage(statusNotificationSchema)
 
 	// Register the schema
-	err = registry.RegisterSchema(ctx, ocpp.V16, "StatusNotificationRequest", validSchema)
+	err = registry.RegisterSchema(ctx, schema_registry.CreateSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Action: "StatusNotificationRequest", Schema: validSchema})
 	s.Require().NoError(err)
 
 	// First fetch - should fetch from remote
-	schema1, found := registry.GetSchema(ctx, ocpp.V16, "StatusNotificationRequest")
+	schema1, found := registry.GetSchema(ctx, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Action: "StatusNotificationRequest"})
 	s.True(found)
 	s.NotNil(schema1)
 
 	// Second fetch immediately - should use cache
-	schema2, found := registry.GetSchema(ctx, ocpp.V16, "StatusNotificationRequest")
+	schema2, found := registry.GetSchema(ctx, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Action: "StatusNotificationRequest"})
 	s.True(found)
 	s.NotNil(schema2)
 	s.Equal(schema1, schema2, "Should return the same schema instance from cache")
@@ -234,7 +239,7 @@ func (s *remoteRegistryIntegrationTestSuite) TestGetSchema_Caching() {
 	time.Sleep(cacheRefresh + 500*time.Millisecond)
 
 	// Third fetch after cache expiry - should fetch from remote again
-	schema3, found := registry.GetSchema(ctx, ocpp.V16, "StatusNotificationRequest")
+	schema3, found := registry.GetSchema(ctx, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Action: "StatusNotificationRequest"})
 	s.True(found)
 	s.NotNil(schema3)
 	// Note: schema3 will be a new instance, but should validate the same data
@@ -273,15 +278,15 @@ func (s *remoteRegistryIntegrationTestSuite) TestGetSchema_MultipleVersions() {
 	}`)
 
 	// Register first version
-	err = registry.RegisterSchema(ctx, ocpp.V16, "HeartbeatRequest", schemaV1)
+	err = registry.RegisterSchema(ctx, schema_registry.CreateSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Action: "HeartbeatRequest", Schema: schemaV1})
 	s.Require().NoError(err)
 
 	// Register second version (should create a new version in the registry)
-	err = registry.RegisterSchema(ctx, ocpp.V16, "HeartbeatRequest", schemaV2)
+	err = registry.RegisterSchema(ctx, schema_registry.CreateSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Action: "HeartbeatRequest", Schema: schemaV2})
 	s.Require().NoError(err)
 
 	// GetSchema should return the latest version
-	schema, found := registry.GetSchema(ctx, ocpp.V16, "HeartbeatRequest")
+	schema, found := registry.GetSchema(ctx, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Action: "HeartbeatRequest"})
 	s.True(found)
 	s.NotNil(schema)
 }
@@ -314,7 +319,7 @@ func (s *remoteRegistryIntegrationTestSuite) TestGetSchema_InvalidInputs() {
 
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
-			schema, found := registry.GetSchema(ctx, tt.ocppVersion, tt.action)
+			schema, found := registry.GetSchema(ctx, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: tt.ocppVersion}, Action: tt.action})
 			s.False(found, "Should not find schema for invalid input")
 			s.Nil(schema, "Schema should be nil for invalid input")
 		})
@@ -359,18 +364,18 @@ func (s *remoteRegistryIntegrationTestSuite) TestGetSchema_DifferentOCPPVersions
 	}`)
 
 	// Register schemas for different OCPP versions
-	err = registry.RegisterSchema(ctx, ocpp.V16, "StartTransactionRequest", schema16)
+	err = registry.RegisterSchema(ctx, schema_registry.CreateSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Action: "StartTransactionRequest", Schema: schema16})
 	s.Require().NoError(err)
 
-	err = registry.RegisterSchema(ctx, ocpp.V20, "StartTransactionRequest", schema20)
+	err = registry.RegisterSchema(ctx, schema_registry.CreateSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V20}, Action: "StartTransactionRequest", Schema: schema20})
 	s.Require().NoError(err)
 
 	// Verify both schemas can be retrieved independently
-	schema1, found1 := registry.GetSchema(ctx, ocpp.V16, "StartTransactionRequest")
+	schema1, found1 := registry.GetSchema(ctx, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Action: "StartTransactionRequest"})
 	s.True(found1, "OCPP 1.6 schema should be found")
 	s.NotNil(schema1)
 
-	schema2, found2 := registry.GetSchema(ctx, ocpp.V20, "StartTransactionRequest")
+	schema2, found2 := registry.GetSchema(ctx, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V20}, Action: "StartTransactionRequest"})
 	s.True(found2, "OCPP 2.0 schema should be found")
 	s.NotNil(schema2)
 
@@ -410,11 +415,11 @@ func (s *remoteRegistryIntegrationTestSuite) TestGetSchema_ResponseSuffix() {
 	}`)
 
 	// Register response schema
-	err = registry.RegisterSchema(ctx, ocpp.V16, "BootNotificationResponse", responseSchema)
+	err = registry.RegisterSchema(ctx, schema_registry.CreateSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Action: "BootNotificationResponse", Schema: responseSchema})
 	s.Require().NoError(err)
 
 	// Retrieve response schema
-	schema, found := registry.GetSchema(ctx, ocpp.V16, "BootNotificationResponse")
+	schema, found := registry.GetSchema(ctx, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Action: "BootNotificationResponse"})
 	s.True(found, "Response schema should be found")
 	s.NotNil(schema, "Response schema should not be nil")
 }
@@ -436,7 +441,7 @@ func (s *remoteRegistryIntegrationTestSuite) TestDeleteSchema() {
 		{
 			name: "Delete existing schema",
 			setup: func() {
-				err := registry.RegisterSchema(ctx, ocpp.V16, "MeterValuesRequest", validSchema)
+				err := registry.RegisterSchema(ctx, schema_registry.CreateSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Action: "MeterValuesRequest", Schema: validSchema})
 				s.Require().NoError(err)
 			},
 			ocppVersion: ocpp.V16,
@@ -469,7 +474,10 @@ func (s *remoteRegistryIntegrationTestSuite) TestDeleteSchema() {
 				tt.setup()
 			}
 
-			err := registry.DeleteSchema(ctx, tt.ocppVersion, tt.action)
+			err := registry.DeleteSchema(ctx, schema_registry.DeleteSchemaRequest{
+				OcppContext: ocpp.OcppContext{Version: tt.ocppVersion},
+				Action:      tt.action,
+			})
 			if tt.expectError {
 				s.Error(err)
 			} else {
@@ -491,17 +499,17 @@ func (s *remoteRegistryIntegrationTestSuite) TestDeleteSchema_CacheInvalidation(
 
 	validSchema := json.RawMessage(authorizationReqSchema)
 
-	err = registry.RegisterSchema(ctx, ocpp.V16, "DataTransferRequest", validSchema)
+	err = registry.RegisterSchema(ctx, schema_registry.CreateSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Action: "DataTransferRequest", Schema: validSchema})
 	s.Require().NoError(err)
 
-	schema, found := registry.GetSchema(ctx, ocpp.V16, "DataTransferRequest")
+	schema, found := registry.GetSchema(ctx, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Action: "DataTransferRequest"})
 	s.True(found, "schema should be found after registration")
 	s.NotNil(schema)
 
-	err = registry.DeleteSchema(ctx, ocpp.V16, "DataTransferRequest")
+	err = registry.DeleteSchema(ctx, schema_registry.DeleteSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Action: "DataTransferRequest"})
 	s.Require().NoError(err)
 
-	_, found = registry.GetSchema(ctx, ocpp.V16, "DataTransferRequest")
+	_, found = registry.GetSchema(ctx, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Action: "DataTransferRequest"})
 	s.False(found, "schema should not be found after deletion — cache must be invalidated")
 }
 
@@ -512,21 +520,21 @@ func (s *remoteRegistryIntegrationTestSuite) TestRegisterAndDeleteLifecycle() {
 
 	validSchema := json.RawMessage(bootNotificationSchema)
 
-	err = registry.RegisterSchema(ctx, ocpp.V16, "ClearCacheRequest", validSchema)
+	err = registry.RegisterSchema(ctx, schema_registry.CreateSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Action: "ClearCacheRequest", Schema: validSchema})
 	s.Require().NoError(err)
 
-	schema, found := registry.GetSchema(ctx, ocpp.V16, "ClearCacheRequest")
+	schema, found := registry.GetSchema(ctx, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Action: "ClearCacheRequest"})
 	s.True(found, "schema should be retrievable after registration")
 	s.NotNil(schema)
 
-	err = registry.DeleteSchema(ctx, ocpp.V16, "ClearCacheRequest")
+	err = registry.DeleteSchema(ctx, schema_registry.DeleteSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Action: "ClearCacheRequest"})
 	s.Require().NoError(err)
 
-	_, found = registry.GetSchema(ctx, ocpp.V16, "ClearCacheRequest")
+	_, found = registry.GetSchema(ctx, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Action: "ClearCacheRequest"})
 	s.False(found, "schema should not be retrievable after deletion")
 
 	// Re-registration after deletion must succeed
-	err = registry.RegisterSchema(ctx, ocpp.V16, "ClearCacheRequest", validSchema)
+	err = registry.RegisterSchema(ctx, schema_registry.CreateSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Action: "ClearCacheRequest", Schema: validSchema})
 	s.NoError(err)
 }
 

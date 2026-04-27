@@ -19,6 +19,8 @@ type registerConfig struct {
 	SchemaFile string
 	SchemaDir  string
 	Action     string
+	Vendor     string
+	Model      string
 }
 
 var registerCfg registerConfig
@@ -63,7 +65,11 @@ The schema file names should match the OCPP action names (e.g., "BootNotificatio
 		logger := zap.L()
 
 		cfg := loadRegisterConfig()
-		version := ocpp.Version(viper.GetString("ocpp.version"))
+		octx := ocpp.OcppContext{
+			Version: ocpp.Version(viper.GetString("ocpp.version")),
+			Vendor:  cfg.Vendor,
+			Model:   cfg.Model,
+		}
 
 		remoteRegistry, err := buildRemoteRegistry(logger)
 		if err != nil {
@@ -74,9 +80,9 @@ The schema file names should match the OCPP action names (e.g., "BootNotificatio
 
 		switch {
 		case cfg.SchemaFile != "":
-			return registerSingleSchema(ctx, logger, remoteRegistry, version, cfg.SchemaFile, cfg.Action)
+			return registerSingleSchema(ctx, logger, remoteRegistry, octx, cfg.SchemaFile, cfg.Action)
 		default:
-			return registerSchemasFromDir(ctx, logger, remoteRegistry, version, cfg.SchemaDir)
+			return registerSchemasFromDir(ctx, logger, remoteRegistry, octx, cfg.SchemaDir)
 		}
 	},
 }
@@ -85,26 +91,33 @@ func registerSingleSchema(
 	ctx context.Context,
 	logger *zap.Logger,
 	registry schema_registry.SchemaRegistry,
-	version ocpp.Version,
+	octx ocpp.OcppContext,
 	filePath, action string,
 ) error {
-	logger.Info("Registering schema",
+	logger = logger.With(
 		zap.String("file", filePath),
 		zap.String("action", action),
-		zap.String("version", version.String()))
+		zap.String("vendor", octx.Vendor),
+		zap.String("model", octx.Model),
+		zap.String("version", octx.Version.String()),
+	)
+
+	logger.Info("Registering schema")
 
 	schemaData, err := os.ReadFile(filePath)
 	if err != nil {
 		return errors.Wrapf(err, "failed to read schema file: %s", filePath)
 	}
 
-	if err := registry.RegisterSchema(ctx, version, action, schemaData); err != nil {
+	if err := registry.RegisterSchema(ctx, schema_registry.CreateSchemaRequest{
+		OcppContext: octx,
+		Action:      action,
+		Schema:      schemaData,
+	}); err != nil {
 		return errors.Wrapf(err, "failed to register schema for action %s", action)
 	}
 
-	logger.Info("Successfully registered schema",
-		zap.String("action", action),
-		zap.String("version", version.String()))
+	logger.Info("Successfully registered schema")
 	return nil
 }
 
@@ -112,12 +125,17 @@ func registerSchemasFromDir(
 	ctx context.Context,
 	logger *zap.Logger,
 	registry schema_registry.SchemaRegistry,
-	version ocpp.Version,
+	octx ocpp.OcppContext,
 	dir string,
 ) error {
-	logger.Info("Registering schemas from directory",
+	logger = logger.With(
 		zap.String("directory", dir),
-		zap.String("version", version.String()))
+		zap.String("vendor", octx.Vendor),
+		zap.String("model", octx.Model),
+		zap.String("version", octx.Version.String()),
+	)
+
+	logger.Info("Registering schemas from directory")
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -150,7 +168,11 @@ func registerSchemasFromDir(
 			continue
 		}
 
-		if err := registry.RegisterSchema(ctx, version, action, schemaData); err != nil {
+		if err := registry.RegisterSchema(ctx, schema_registry.CreateSchemaRequest{
+			OcppContext: octx,
+			Action:      action,
+			Schema:      schemaData,
+		}); err != nil {
 			logger.Error("Failed to register schema",
 				zap.String("file", schemaPath),
 				zap.String("action", action),
@@ -181,6 +203,8 @@ func loadRegisterConfig() registerConfig {
 		SchemaFile: viper.GetString("schema.register.file"),
 		SchemaDir:  viper.GetString("schema.register.dir"),
 		Action:     viper.GetString("schema.register.action"),
+		Vendor:     viper.GetString("vendor"),
+		Model:      viper.GetString("model"),
 	}
 }
 

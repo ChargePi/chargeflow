@@ -71,7 +71,11 @@ You can remove a single schema by action name, derive the action from a file nam
 		logger := zap.L()
 
 		cfg := loadRemoveConfig()
-		version := ocpp.Version(viper.GetString("ocpp.version"))
+		octx := ocpp.OcppContext{
+			Version: ocpp.Version(viper.GetString("ocpp.version")),
+			Vendor:  vendor,
+			Model:   model,
+		}
 
 		remoteRegistry, err := buildRemoteRegistry(logger)
 		if err != nil {
@@ -82,12 +86,12 @@ You can remove a single schema by action name, derive the action from a file nam
 
 		switch {
 		case cfg.Action != "":
-			return removeSingleSchema(ctx, logger, remoteRegistry, version, cfg.Action)
+			return removeSingleSchema(ctx, logger, remoteRegistry, octx, cfg.Action)
 		case cfg.SchemaFile != "":
 			action, _ := strings.CutSuffix(filepath.Base(cfg.SchemaFile), ".json")
-			return removeSingleSchema(ctx, logger, remoteRegistry, version, action)
+			return removeSingleSchema(ctx, logger, remoteRegistry, octx, action)
 		default:
-			return removeSchemasFromDir(ctx, logger, remoteRegistry, version, cfg.SchemaDir)
+			return removeSchemasFromDir(ctx, logger, remoteRegistry, octx, cfg.SchemaDir)
 		}
 	},
 }
@@ -96,20 +100,25 @@ func removeSingleSchema(
 	ctx context.Context,
 	logger *zap.Logger,
 	registry schema_registry.SchemaRegistry,
-	version ocpp.Version,
+	octx ocpp.OcppContext,
 	action string,
 ) error {
-	logger.Info("Removing schema",
+	logger = logger.With(
 		zap.String("action", action),
-		zap.String("version", version.String()))
+		zap.String("vendor", octx.Vendor),
+		zap.String("model", octx.Model),
+		zap.String("version", octx.Version.String()),
+	)
+	logger.Info("Removing schema")
 
-	if err := registry.DeleteSchema(ctx, version, action); err != nil {
+	if err := registry.DeleteSchema(ctx, schema_registry.DeleteSchemaRequest{
+		OcppContext: octx,
+		Action:      action,
+	}); err != nil {
 		return errors.Wrapf(err, "failed to remove schema for action %s", action)
 	}
 
-	logger.Info("Successfully removed schema",
-		zap.String("action", action),
-		zap.String("version", version.String()))
+	logger.Info("Successfully removed schema")
 	return nil
 }
 
@@ -117,12 +126,16 @@ func removeSchemasFromDir(
 	ctx context.Context,
 	logger *zap.Logger,
 	registry schema_registry.SchemaRegistry,
-	version ocpp.Version,
+	octx ocpp.OcppContext,
 	dir string,
 ) error {
-	logger.Info("Removing schemas matching directory",
+	logger = logger.With(
 		zap.String("directory", dir),
-		zap.String("version", version.String()))
+		zap.String("vendor", octx.Vendor),
+		zap.String("model", octx.Model),
+		zap.String("version", octx.Version.String()),
+	)
+	logger.Info("Removing schemas matching directory")
 
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -145,7 +158,10 @@ func removeSchemasFromDir(
 
 		action, _ := strings.CutSuffix(fileName, ".json")
 
-		if err := registry.DeleteSchema(ctx, version, action); err != nil {
+		if err := registry.DeleteSchema(ctx, schema_registry.DeleteSchemaRequest{
+			OcppContext: octx,
+			Action:      action,
+		}); err != nil {
 			logger.Error("Failed to remove schema",
 				zap.String("action", action),
 				zap.String("file", fileName),

@@ -16,6 +16,11 @@ const (
 	serviceVersion = "0.1.0-beta"
 )
 
+var (
+	vendor = ""
+	model  = ""
+)
+
 var rootCmd = &cobra.Command{
 	Use:     "chargeflow",
 	Short:   "",
@@ -45,9 +50,13 @@ func rootFlags() {
 	// Add flag for OCPP version
 	rootCmd.PersistentFlags().StringP("version", "v", ocpp.V16.String(), "OCPP version to use (1.6, 2.0.1 or 2.1)")
 	rootCmd.PersistentFlags().BoolP("debug", "d", false, "Enable debug mode")
+	rootCmd.PersistentFlags().StringVarP(&vendor, "vendor", "V", "", "Charging-station vendor for vendor/model-specific schema selection")
+	rootCmd.PersistentFlags().StringVarP(&model, "model", "m", "", "Charging-station model for vendor/model-specific schema selection")
 
 	_ = viper.BindPFlag("ocpp.version", rootCmd.PersistentFlags().Lookup("version"))
 	_ = viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
+	_ = viper.BindPFlag("vendor", rootCmd.PersistentFlags().Lookup("vendor"))
+	_ = viper.BindPFlag("model", rootCmd.PersistentFlags().Lookup("model"))
 }
 
 func Execute(ctx context.Context) error {

@@ -2,7 +2,6 @@ package file_registry
 
 import (
 	"context"
-	"encoding/json"
 	"strings"
 	"sync"
 
@@ -11,6 +10,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/ChargePi/chargeflow/pkg/ocpp"
+	"github.com/ChargePi/chargeflow/pkg/schema_registry"
 )
 
 const (
@@ -59,87 +59,119 @@ func NewFileSchemaRegistry(logger *zap.Logger, opts ...RegistryOption) *SchemaRe
 //
 // The rawSchema should be a valid JSON schema in raw format.
 // The action is the name of the OCPP action that this schema applies to. Must be suffixed with either "Request" or "Response".
-func (fsr *SchemaRegistry) RegisterSchema(_ context.Context, ocppVersion ocpp.Version, action string, rawSchema json.RawMessage) error {
-	logger := fsr.logger.With(zap.String("ocppVersion", ocppVersion.String()), zap.String("action", action))
+func (fsr *SchemaRegistry) RegisterSchema(_ context.Context, req schema_registry.CreateSchemaRequest) error {
+	logger := fsr.logger.With(zap.String("ocppVersion", req.OcppContext.Version.String()), zap.String("action", req.Action))
 	logger.Debug("Registering schema")
 
 	// Validate the OCPP version
-	if !ocpp.IsValidProtocolVersion(ocppVersion) {
-		return errors.Errorf("invalid OCPP version: %s", ocppVersion)
+	if !ocpp.IsValidProtocolVersion(req.OcppContext.Version) {
+		return errors.Errorf("invalid OCPP version: %s", req.OcppContext.Version)
 	}
 
 	// Must be a valid action name ending with "Request" or "Response"
-	if !(strings.HasSuffix(action, RequestSuffix) || strings.HasSuffix(action, ResponseSuffix)) {
-		return errors.Errorf("action must end with 'Request' or 'Response': %s", action)
+	if !(strings.HasSuffix(req.Action, RequestSuffix) || strings.HasSuffix(req.Action, ResponseSuffix)) {
+		return errors.Errorf("action must end with 'Request' or 'Response': %s", req.Action)
 	}
 
 	logger.Debug("Compiling schema")
-	// Compile the schema using the jsonschema compiler
-	schema, err := compiler.Compile(rawSchema)
+	schema, err := compiler.Compile(req.Schema)
 	if err != nil {
 		return errors.Wrap(err, "failed to compile schema")
 	}
 
-	// Acquire write lock to modify the schemasPerOcppVersion map
 	fsr.mu.Lock()
 	defer fsr.mu.Unlock()
 
-	if _, exists := fsr.schemasPerOcppVersion[ocppVersion]; !exists {
-		fsr.schemasPerOcppVersion[ocppVersion] = make(map[string]*jsonschema.Schema)
+	if _, exists := fsr.schemasPerOcppVersion[req.OcppContext.Version]; !exists {
+		fsr.schemasPerOcppVersion[req.OcppContext.Version] = make(map[string]*jsonschema.Schema)
 	}
+
+	key := buildStorageKey(req.OcppContext.Vendor, req.OcppContext.Model, req.Action)
 
 	if !fsr.config.overwrite {
 		logger.Debug("Overwriting previous schema")
-		// Check if the schema already exists for the given action
-		if _, exists := fsr.schemasPerOcppVersion[ocppVersion][action]; exists {
-			return errors.Errorf("schema for action %s already exists for OCPP version %s", action, ocppVersion)
+		if _, exists := fsr.schemasPerOcppVersion[req.OcppContext.Version][key]; exists {
+			return errors.Errorf("schema for action %s already exists for OCPP version %s", req.Action, req.OcppContext.Version)
 		}
 	}
 
-	// Register the schema for the specific action
-	fsr.schemasPerOcppVersion[ocppVersion][action] = schema
+	fsr.schemasPerOcppVersion[req.OcppContext.Version][key] = schema
 
 	return nil
 }
 
 // DeleteSchema removes a schema for a specific OCPP version and action.
-func (fsr *SchemaRegistry) DeleteSchema(_ context.Context, ocppVersion ocpp.Version, action string) error {
-	logger := fsr.logger.With(zap.String("ocppVersion", ocppVersion.String()), zap.String("action", action))
+func (fsr *SchemaRegistry) DeleteSchema(_ context.Context, req schema_registry.DeleteSchemaRequest) error {
+	logger := fsr.logger.With(zap.String("ocppVersion", req.OcppContext.Version.String()), zap.String("action", req.Action))
 	logger.Debug("Deleting schema")
 
-	if !ocpp.IsValidProtocolVersion(ocppVersion) {
-		return errors.Errorf("invalid OCPP version: %s", ocppVersion)
+	if !ocpp.IsValidProtocolVersion(req.OcppContext.Version) {
+		return errors.Errorf("invalid OCPP version: %s", req.OcppContext.Version)
 	}
 
 	fsr.mu.Lock()
 	defer fsr.mu.Unlock()
 
-	schemas, exists := fsr.schemasPerOcppVersion[ocppVersion]
+	schemas, exists := fsr.schemasPerOcppVersion[req.OcppContext.Version]
 	if !exists {
-		return errors.Errorf("no schemas registered for OCPP version %s", ocppVersion)
+		return errors.Errorf("no schemas registered for OCPP version %s", req.OcppContext.Version)
 	}
 
-	if _, exists := schemas[action]; !exists {
-		return errors.Errorf("schema for action %s not found for OCPP version %s", action, ocppVersion)
+	key := buildStorageKey(req.OcppContext.Vendor, req.OcppContext.Model, req.Action)
+	if _, exists := schemas[key]; !exists {
+		return errors.Errorf("schema for action %s not found for OCPP version %s", req.Action, req.OcppContext.Version)
 	}
 
-	delete(schemas, action)
+	delete(schemas, key)
 	return nil
 }
 
+// buildStorageKey returns a composite key that incorporates vendor and model when
+// provided, keeping vendor/model-specific schemas separate from base schemas.
+func buildStorageKey(vendor, model, action string) string {
+	if vendor == "" && model == "" {
+		return action
+	}
+	parts := make([]string, 0, 3)
+	if vendor != "" {
+		parts = append(parts, vendor)
+	}
+	if model != "" {
+		parts = append(parts, model)
+	}
+	parts = append(parts, action)
+	return strings.Join(parts, "|")
+}
+
 // GetSchema retrieves a schema for a specific OCPP version and action.
-func (fsr *SchemaRegistry) GetSchema(_ context.Context, ocppVersion ocpp.Version, action string) (*jsonschema.Schema, bool) {
-	fsr.logger.Debug("Getting schema", zap.String("ocppVersion", ocppVersion.String()), zap.String("action", action))
+// When Vendor and/or Model are set it first tries the vendor/model-specific
+// schema and falls back to the base OCPP spec schema.
+func (fsr *SchemaRegistry) GetSchema(_ context.Context, req schema_registry.GetSchemaRequest) (*jsonschema.Schema, bool) {
+	fsr.logger.Debug("Getting schema",
+		zap.String("ocppVersion", req.OcppContext.Version.String()),
+		zap.String("action", req.Action),
+		zap.String("vendor", req.OcppContext.Vendor),
+		zap.String("model", req.OcppContext.Model),
+	)
 
 	fsr.mu.RLock()
 	defer fsr.mu.RUnlock()
 
-	// Check if the OCPP version exists in the registry
-	if schemas, exists := fsr.schemasPerOcppVersion[ocppVersion]; exists {
-		// Check if the action exists for the given OCPP version
-		if schema, exists := schemas[action]; exists {
+	schemas, exists := fsr.schemasPerOcppVersion[req.OcppContext.Version]
+	if !exists {
+		return nil, false
+	}
+
+	// Try vendor/model-specific key first when either field is provided.
+	if req.OcppContext.Vendor != "" || req.OcppContext.Model != "" {
+		if schema, ok := schemas[buildStorageKey(req.OcppContext.Vendor, req.OcppContext.Model, req.Action)]; ok {
 			return schema, true
 		}
+	}
+
+	// Fall back to the base OCPP spec schema.
+	if schema, ok := schemas[req.Action]; ok {
+		return schema, true
 	}
 
 	return nil, false
