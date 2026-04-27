@@ -20,10 +20,7 @@ func NewValidationResult() *ValidationResult {
 }
 
 func (v *ValidationResult) AddError(err string) {
-	if v.isValid != false {
-		v.isValid = false
-	}
-
+	v.isValid = false
 	v.errors = append(v.errors, err)
 }
 

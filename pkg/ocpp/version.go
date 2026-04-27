@@ -7,13 +7,11 @@ const (
 	V21 = Version("2.1")
 )
 
-type (
-	// Version OCPP version of the central system or charge point
-	Version string
-)
+// Version OCPP version of the central system or charge point
+type Version string
 
-func (p Version) String() string {
-	return string(p)
+func (v Version) String() string {
+	return string(v)
 }
 
 func IsValidProtocolVersion(version Version) bool {
