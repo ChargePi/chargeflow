@@ -1,6 +1,7 @@
 package schema_registry
 
 import (
+	"context"
 	"encoding/json"
 
 	"github.com/kaptinlin/jsonschema"
@@ -9,7 +10,7 @@ import (
 )
 
 type SchemaRegistry interface {
-	RegisterSchema(ocppVersion ocpp.Version, action string, rawSchema json.RawMessage) error
-	GetSchema(ocppVersion ocpp.Version, action string) (*jsonschema.Schema, bool)
+	RegisterSchema(ctx context.Context, ocppVersion ocpp.Version, action string, rawSchema json.RawMessage) error
+	GetSchema(ctx context.Context, ocppVersion ocpp.Version, action string) (*jsonschema.Schema, bool)
 	Type() string
 }

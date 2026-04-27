@@ -1,4 +1,4 @@
-package registries
+package remote
 
 import (
 	"bytes"
@@ -10,129 +10,42 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/kaptinlin/jsonschema"
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 
+	"github.com/ChargePi/chargeflow/pkg/schema_registry/registries/file"
+
 	"github.com/ChargePi/chargeflow/pkg/ocpp"
-)
-
-type authConfig struct {
-	authType          authType
-	username          string
-	password          string
-	bearerToken       string
-	apiKey            string
-	apiKeyHeader      string
-	customHeaderName  string
-	customHeaderValue string
-}
-
-type authType int
-
-const (
-	authTypeNone authType = iota
-	authTypeBasic
-	authTypeBearer
-	authTypeAPIKey
-	authTypeCustomHeader
 )
 
 type remoteRegistryConfig struct {
 	url string
 	// Cache settings
 	cacheRefresh time.Duration
+	cache        Cache
 	timeout      time.Duration
 	auth         authConfig
 }
 
-type RemoteOptions func(*remoteRegistryConfig)
-
-func WithCacheRefreshDuration(d time.Duration) RemoteOptions {
-	return func(c *remoteRegistryConfig) {
-		c.cacheRefresh = d
-	}
-}
-
-func WithTimeout(d time.Duration) RemoteOptions {
-	return func(c *remoteRegistryConfig) {
-		c.timeout = d
-	}
-}
-
-// WithBasicAuth configures basic authentication with username and password.
-func WithBasicAuth(username, password string) RemoteOptions {
-	return func(c *remoteRegistryConfig) {
-		c.auth = authConfig{
-			authType: authTypeBasic,
-			username: username,
-			password: password,
-		}
-	}
-}
-
-// WithBearerToken configures bearer token authentication.
-func WithBearerToken(token string) RemoteOptions {
-	return func(c *remoteRegistryConfig) {
-		c.auth = authConfig{
-			authType:    authTypeBearer,
-			bearerToken: token,
-		}
-	}
-}
-
-// WithAPIKey configures API key authentication with a custom header name.
-// If headerName is empty, it defaults to "X-API-Key".
-func WithAPIKey(apiKey, headerName string) RemoteOptions {
-	if headerName == "" {
-		headerName = "X-API-Key"
-	}
-	return func(c *remoteRegistryConfig) {
-		c.auth = authConfig{
-			authType:     authTypeAPIKey,
-			apiKey:       apiKey,
-			apiKeyHeader: headerName,
-		}
-	}
-}
-
-// WithCustomHeader configures a custom header for authentication.
-func WithCustomHeader(headerName, headerValue string) RemoteOptions {
-	return func(c *remoteRegistryConfig) {
-		c.auth = authConfig{
-			authType:          authTypeCustomHeader,
-			customHeaderName:  headerName,
-			customHeaderValue: headerValue,
-		}
-	}
-}
-
-type cachedSchema struct {
-	schema   *jsonschema.Schema
-	cachedAt time.Time
-}
-
-// RemoteSchemaRegistry fetches schemas from a remote schema registry service and caches them locally to reduce latency and network calls.
-type RemoteSchemaRegistry struct {
+// SchemaRegistry fetches schemas from a remote schema registry service and caches them locally to reduce latency and network calls.
+type SchemaRegistry struct {
 	logger *zap.Logger
 
 	config     remoteRegistryConfig
 	httpClient *http.Client
 	baseURL    string
 
-	mu sync.RWMutex // Protects concurrent access to cache
-	// Map of cached schemas per OCPP version and action
-	cache map[ocpp.Version]map[string]*cachedSchema
-
+	cache    Cache
 	compiler *jsonschema.Compiler
 }
 
 // applyAuthHeaders adds authentication headers to the request based on the auth config.
-func (r *RemoteSchemaRegistry) applyAuthHeaders(req *http.Request) {
+func (r *SchemaRegistry) applyAuthHeaders(req *http.Request) {
 	switch r.config.auth.authType {
 	case authTypeBasic:
 		credentials := base64.StdEncoding.EncodeToString([]byte(r.config.auth.username + ":" + r.config.auth.password))
@@ -143,39 +56,13 @@ func (r *RemoteSchemaRegistry) applyAuthHeaders(req *http.Request) {
 		req.Header.Set(r.config.auth.apiKeyHeader, r.config.auth.apiKey)
 	case authTypeCustomHeader:
 		req.Header.Set(r.config.auth.customHeaderName, r.config.auth.customHeaderValue)
+	default:
+		// No auth
 	}
-}
-
-// logRequestBody logs the request body if present.
-func (r *RemoteSchemaRegistry) logRequestBody(method, url string, bodyBytes []byte) {
-	if len(bodyBytes) == 0 {
-		r.logger.Info("Executing request",
-			zap.String("method", method),
-			zap.String("url", url))
-		return
-	}
-
-	// Try to pretty-print JSON if possible, otherwise use raw string
-	var bodyStr string
-	var jsonBody interface{}
-	if err := json.Unmarshal(bodyBytes, &jsonBody); err == nil {
-		if prettyJSON, err := json.MarshalIndent(jsonBody, "", "  "); err == nil {
-			bodyStr = string(prettyJSON)
-		} else {
-			bodyStr = string(bodyBytes)
-		}
-	} else {
-		bodyStr = string(bodyBytes)
-	}
-
-	r.logger.Info("Executing request",
-		zap.String("method", method),
-		zap.String("url", url),
-		zap.String("body", bodyStr))
 }
 
 // doRequest performs an HTTP request with authentication and logging.
-func (r *RemoteSchemaRegistry) doRequest(ctx context.Context, method, path string, body []byte) (*http.Response, error) {
+func (r *SchemaRegistry) doRequest(ctx context.Context, method, path string, body []byte) (*http.Response, error) {
 	fullURL, err := url.JoinPath(r.baseURL, path)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to build URL for path %s", path)
@@ -184,12 +71,8 @@ func (r *RemoteSchemaRegistry) doRequest(ctx context.Context, method, path strin
 	var bodyReader io.Reader
 	if body != nil {
 		bodyReader = bytes.NewReader(body)
-		// Log request body before sending
-		if method == http.MethodPost || method == http.MethodPut || method == http.MethodPatch {
-			r.logRequestBody(method, fullURL, body)
-		}
 	}
-	r.logger.Info("Executing request",
+	r.logger.Debug("Executing request",
 		zap.String("method", method),
 		zap.String("url", fullURL))
 
@@ -210,7 +93,7 @@ func (r *RemoteSchemaRegistry) doRequest(ctx context.Context, method, path strin
 	return r.httpClient.Do(req)
 }
 
-func NewRemoteSchemaRegistry(baseURL string, logger *zap.Logger, opts ...RemoteOptions) (*RemoteSchemaRegistry, error) {
+func NewRemoteSchemaRegistry(baseURL string, logger *zap.Logger, opts ...Options) (*SchemaRegistry, error) {
 	// Default configuration
 	config := remoteRegistryConfig{
 		url:          baseURL,
@@ -224,6 +107,12 @@ func NewRemoteSchemaRegistry(baseURL string, logger *zap.Logger, opts ...RemoteO
 		opt(&config)
 	}
 
+	// Validate the URL
+	_, err := url.Parse(baseURL)
+	if err != nil {
+		return nil, errors.Wrapf(err, "invalid base URL")
+	}
+
 	// Ensure baseURL ends with a slash
 	if !strings.HasSuffix(baseURL, "/") {
 		baseURL += "/"
@@ -234,14 +123,23 @@ func NewRemoteSchemaRegistry(baseURL string, logger *zap.Logger, opts ...RemoteO
 		Timeout: config.timeout,
 	}
 
-	return &RemoteSchemaRegistry{
+	cache := config.cache
+	if cache == nil {
+		cache = NewMemoryCache(config.cacheRefresh)
+	}
+
+	registry := &SchemaRegistry{
 		config:     config,
 		httpClient: httpClient,
 		baseURL:    baseURL,
-		cache:      make(map[ocpp.Version]map[string]*cachedSchema),
+		cache:      cache,
 		compiler:   jsonschema.NewCompiler(),
 		logger:     logger,
-	}, nil
+	}
+
+	// Pre-load OCPP schemas
+
+	return registry, nil
 }
 
 // buildSubjectName constructs a subject name from OCPP version and action.
@@ -253,7 +151,7 @@ func buildSubjectName(ocppVersion ocpp.Version, action string) string {
 }
 
 // getLatestVersion fetches the latest version number for a subject from the remote registry.
-func (r *RemoteSchemaRegistry) getLatestVersion(ctx context.Context, subject string) (int, error) {
+func (r *SchemaRegistry) getLatestVersion(ctx context.Context, subject string) (int, error) {
 	path := fmt.Sprintf("subjects/%s/versions", url.PathEscape(subject))
 	resp, err := r.doRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
@@ -288,9 +186,13 @@ func (r *RemoteSchemaRegistry) getLatestVersion(ctx context.Context, subject str
 	return slices.Max(versions), nil
 }
 
+type schemaResponse struct {
+	Schema string `json:"schema"`
+}
+
 // fetchSchemaFromRemote fetches a schema from the remote registry for a given subject and version.
-func (r *RemoteSchemaRegistry) fetchSchemaFromRemote(ctx context.Context, subject string, version int) (json.RawMessage, error) {
-	versionStr := fmt.Sprintf("%d", version)
+func (r *SchemaRegistry) fetchSchemaFromRemote(ctx context.Context, subject string, version int) (json.RawMessage, error) {
+	versionStr := strconv.Itoa(version)
 	path := fmt.Sprintf("subjects/%s/versions/%s/schema", url.PathEscape(subject), url.PathEscape(versionStr))
 	resp, err := r.doRequest(ctx, http.MethodGet, path, nil)
 	if err != nil {
@@ -303,15 +205,13 @@ func (r *RemoteSchemaRegistry) fetchSchemaFromRemote(ctx context.Context, subjec
 		return nil, errors.Wrapf(err, "failed to read response body for subject %s version %d", subject, version)
 	}
 
-	var schemaResponse struct {
-		Schema string `json:"schema"`
-	}
+	var response schemaResponse
 
 	switch resp.StatusCode {
 	case http.StatusOK:
 		// Try to parse as structured response first
-		if err := json.Unmarshal(bodyBytes, &schemaResponse); err == nil && schemaResponse.Schema != "" {
-			return json.RawMessage(schemaResponse.Schema), nil
+		if err := json.Unmarshal(bodyBytes, &response); err == nil && response.Schema != "" {
+			return json.RawMessage(response.Schema), nil
 		}
 		// If structured parsing fails, try as direct string
 		var schemaStr string
@@ -331,7 +231,12 @@ func (r *RemoteSchemaRegistry) fetchSchemaFromRemote(ctx context.Context, subjec
 	}
 }
 
-func (r *RemoteSchemaRegistry) RegisterSchema(ocppVersion ocpp.Version, action string, rawSchema json.RawMessage) error {
+type RegisterSchemaRequest struct {
+	Schema     string `json:"schema"`
+	SchemaType string `json:"schemaType"`
+}
+
+func (r *SchemaRegistry) RegisterSchema(ctx context.Context, ocppVersion ocpp.Version, action string, rawSchema json.RawMessage) error {
 	logger := r.logger.With(zap.String("ocppVersion", ocppVersion.String()), zap.String("action", action))
 	logger.Debug("Registering schema to remote registry")
 
@@ -341,13 +246,13 @@ func (r *RemoteSchemaRegistry) RegisterSchema(ocppVersion ocpp.Version, action s
 	}
 
 	// Must be a valid action name ending with "Request" or "Response"
-	if !(strings.HasSuffix(action, RequestSuffix) || strings.HasSuffix(action, ResponseSuffix)) {
+	if !(strings.HasSuffix(action, file.RequestSuffix) || strings.HasSuffix(action, file.ResponseSuffix)) {
 		return errors.Errorf("action must end with 'Request' or 'Response': %s", action)
 	}
 
 	subject := buildSubjectName(ocppVersion, action)
 
-	ctx, cancel := context.WithTimeout(context.Background(), r.config.timeout)
+	ctx, cancel := context.WithTimeout(ctx, r.config.timeout)
 	defer cancel()
 
 	// Validate and normalize the schema before sending
@@ -374,17 +279,14 @@ func (r *RemoteSchemaRegistry) RegisterSchema(ocppVersion ocpp.Version, action s
 	// The schema must be sent as a JSON string
 	// Convert normalized bytes to string - this is raw JSON without any escaping
 	// json.Marshal will properly escape this string when serializing the request body
-	schemaStr := string(normalizedBytes)
 
-	logger.Debug("Schema string prepared for registration",
-		zap.String("subject", subject),
-		zap.Int("schemaLength", len(schemaStr)))
+	logger.Debug("Schema string prepared for registration", zap.String("subject", subject))
 
 	// Create the request payload
-	schemaType := "JSON"
-	payload := map[string]interface{}{
-		"schema":     schemaStr,
-		"schemaType": schemaType,
+	schemaStr := string(normalizedBytes)
+	payload := RegisterSchemaRequest{
+		Schema:     schemaStr,
+		SchemaType: "JSON",
 	}
 
 	// Serialize the payload
@@ -392,11 +294,6 @@ func (r *RemoteSchemaRegistry) RegisterSchema(ocppVersion ocpp.Version, action s
 	if err != nil {
 		return errors.Wrapf(err, "failed to serialize request payload for subject %s", subject)
 	}
-
-	logger.Debug("Normalized schema for registration",
-		zap.String("subject", subject),
-		zap.Int("schemaLength", len(schemaStr)),
-		zap.Int("payloadLength", len(payloadBytes)))
 
 	// Make the request
 	path := fmt.Sprintf("subjects/%s/versions", url.PathEscape(subject))
@@ -432,17 +329,13 @@ func (r *RemoteSchemaRegistry) RegisterSchema(ocppVersion ocpp.Version, action s
 	}
 
 	// Invalidate cache for this schema
-	r.mu.Lock()
-	if _, exists := r.cache[ocppVersion]; exists {
-		delete(r.cache[ocppVersion], action)
-	}
-	r.mu.Unlock()
+	r.cache.Delete(ctx, ocppVersion, action)
 
 	logger.Debug("Successfully registered schema to remote registry")
 	return nil
 }
 
-func (r *RemoteSchemaRegistry) GetSchema(ocppVersion ocpp.Version, action string) (*jsonschema.Schema, bool) {
+func (r *SchemaRegistry) GetSchema(ctx context.Context, ocppVersion ocpp.Version, action string) (*jsonschema.Schema, bool) {
 	logger := r.logger.With(zap.String("ocppVersion", ocppVersion.String()), zap.String("action", action))
 	logger.Debug("Getting schema")
 
@@ -453,29 +346,20 @@ func (r *RemoteSchemaRegistry) GetSchema(ocppVersion ocpp.Version, action string
 	}
 
 	// Must be a valid action name ending with "Request" or "Response"
-	if !(strings.HasSuffix(action, RequestSuffix) || strings.HasSuffix(action, ResponseSuffix)) {
+	if !(strings.HasSuffix(action, file.RequestSuffix) || strings.HasSuffix(action, file.ResponseSuffix)) {
 		logger.Warn("Invalid action name")
 		return nil, false
 	}
 
 	// Check cache first
-	r.mu.RLock()
-	if schemas, exists := r.cache[ocppVersion]; exists {
-		if cached, exists := schemas[action]; exists {
-			// Check if cache is still valid
-			if time.Since(cached.cachedAt) < r.config.cacheRefresh {
-				logger.Debug("Returning schema from cache")
-				r.mu.RUnlock()
-				return cached.schema, true
-			}
-			logger.Debug("Cache expired, fetching from remote")
-		}
+	if schema, ok := r.cache.Get(ctx, ocppVersion, action); ok {
+		logger.Debug("Returning schema from cache")
+		return schema, true
 	}
-	r.mu.RUnlock()
 
 	// Cache miss or expired - fetch from remote
 	subject := buildSubjectName(ocppVersion, action)
-	ctx, cancel := context.WithTimeout(context.Background(), r.config.timeout)
+	ctx, cancel := context.WithTimeout(ctx, r.config.timeout)
 	defer cancel()
 
 	// Get the latest version
@@ -500,20 +384,12 @@ func (r *RemoteSchemaRegistry) GetSchema(ocppVersion ocpp.Version, action string
 	}
 
 	// Update cache
-	r.mu.Lock()
-	if _, exists := r.cache[ocppVersion]; !exists {
-		r.cache[ocppVersion] = make(map[string]*cachedSchema)
-	}
-	r.cache[ocppVersion][action] = &cachedSchema{
-		schema:   schema,
-		cachedAt: time.Now(),
-	}
-	r.mu.Unlock()
+	r.cache.Set(ctx, ocppVersion, action, schema)
 
 	logger.Debug("Successfully fetched and cached schema from remote")
 	return schema, true
 }
 
-func (r *RemoteSchemaRegistry) Type() string {
+func (r *SchemaRegistry) Type() string {
 	return "remote"
 }

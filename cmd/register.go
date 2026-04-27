@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,13 +12,15 @@ import (
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 
+	"github.com/ChargePi/chargeflow/pkg/schema_registry/registries/remote"
+
 	"github.com/ChargePi/chargeflow/pkg/ocpp"
 	"github.com/ChargePi/chargeflow/pkg/schema_registry"
-	"github.com/ChargePi/chargeflow/pkg/schema_registry/registries"
 )
 
 type registerConfig struct {
 	URL          string
+	AuthType     string
 	Username     string
 	Password     string
 	BearerToken  string
@@ -97,41 +100,51 @@ The schema file names should match the OCPP action names (e.g., "BootNotificatio
 		version := ocpp.Version(ocppVersion)
 
 		// Build remote registry options
-		opts := []registries.RemoteOptions{
-			registries.WithTimeout(cfg.Timeout),
+		opts := []remote.Options{
+			remote.WithTimeout(cfg.Timeout),
 		}
 
 		// Add authentication option
-		switch {
-		case cfg.Username != "" && cfg.Password != "":
-			opts = append(opts, registries.WithBasicAuth(cfg.Username, cfg.Password))
-		case cfg.BearerToken != "":
-			opts = append(opts, registries.WithBearerToken(cfg.BearerToken))
-		case cfg.APIKey != "":
-			opts = append(opts, registries.WithAPIKey(cfg.APIKey, cfg.APIKeyHeader))
-		case cfg.CustomHeader != "" && cfg.CustomValue != "":
-			opts = append(opts, registries.WithCustomHeader(cfg.CustomHeader, cfg.CustomValue))
+		switch cfg.AuthType {
+		case "basic":
+			opts = append(opts, remote.WithBasicAuth(cfg.Username, cfg.Password))
+		case "bearer":
+			opts = append(opts, remote.WithBearerToken(cfg.BearerToken))
+		case "api-key":
+			opts = append(opts, remote.WithAPIKey(cfg.APIKey, cfg.APIKeyHeader))
+		}
+
+		if cfg.CustomHeader != "" && cfg.CustomValue != "" {
+			opts = append(opts, remote.WithCustomHeader(cfg.CustomHeader, cfg.CustomValue))
 		}
 
 		// Create remote registry
-		remoteRegistry, err := registries.NewRemoteSchemaRegistry(cfg.URL, logger, opts...)
+		remoteRegistry, err := remote.NewRemoteSchemaRegistry(cfg.URL, logger, opts...)
 		if err != nil {
 			return errors.Wrap(err, "failed to create remote schema registry")
 		}
+
+		ctx := cmd.Context()
 
 		// Register schema(s)
 		switch {
 		case cfg.SchemaFile != "":
 			// Register single schema file
-			return registerSingleSchema(logger, remoteRegistry, version, cfg.SchemaFile, cfg.Action)
+			return registerSingleSchema(ctx, logger, remoteRegistry, version, cfg.SchemaFile, cfg.Action)
 		default:
 			// Register all schemas from directory
-			return registerSchemasFromDir(logger, remoteRegistry, version, cfg.SchemaDir)
+			return registerSchemasFromDir(ctx, logger, remoteRegistry, version, cfg.SchemaDir)
 		}
 	},
 }
 
-func registerSingleSchema(logger *zap.Logger, registry *registries.RemoteSchemaRegistry, version ocpp.Version, filePath, action string) error {
+func registerSingleSchema(
+	ctx context.Context,
+	logger *zap.Logger,
+	registry schema_registry.SchemaRegistry,
+	version ocpp.Version,
+	filePath, action string,
+) error {
 	logger.Info("Registering schema",
 		zap.String("file", filePath),
 		zap.String("action", action),
@@ -142,7 +155,7 @@ func registerSingleSchema(logger *zap.Logger, registry *registries.RemoteSchemaR
 		return errors.Wrapf(err, "failed to read schema file: %s", filePath)
 	}
 
-	if err := registry.RegisterSchema(version, action, schemaData); err != nil {
+	if err := registry.RegisterSchema(ctx, version, action, schemaData); err != nil {
 		return errors.Wrapf(err, "failed to register schema for action %s", action)
 	}
 
@@ -154,7 +167,13 @@ func registerSingleSchema(logger *zap.Logger, registry *registries.RemoteSchemaR
 
 // registerSchemasFromDir registers all schemas from a directory to the given registry.
 // This function is shared between validate and register commands.
-func registerSchemasFromDir(logger *zap.Logger, registry schema_registry.SchemaRegistry, version ocpp.Version, dir string) error {
+func registerSchemasFromDir(
+	ctx context.Context,
+	logger *zap.Logger,
+	registry schema_registry.SchemaRegistry,
+	version ocpp.Version,
+	dir string,
+) error {
 	logger.Info("Registering schemas from directory",
 		zap.String("directory", dir),
 		zap.String("version", version.String()))
@@ -193,7 +212,7 @@ func registerSchemasFromDir(logger *zap.Logger, registry schema_registry.SchemaR
 		}
 
 		// Register schema
-		if err := registry.RegisterSchema(version, action, schemaData); err != nil {
+		if err := registry.RegisterSchema(ctx, version, action, schemaData); err != nil {
 			logger.Error("Failed to register schema",
 				zap.String("file", schemaPath),
 				zap.String("action", action),
@@ -208,11 +227,14 @@ func registerSchemasFromDir(logger *zap.Logger, registry schema_registry.SchemaR
 		successCount++
 	}
 
-	if errorCount > 0 {
-		return errors.Errorf("failed to register %d schema(s), %d succeeded", errorCount, successCount)
+	if successCount > 0 && errorCount == 0 {
+		logger.Info("Successfully registered schemas", zap.Int("successful", successCount))
 	}
 
-	logger.Info("Successfully registered schemas", zap.Int("count", successCount))
+	if errorCount > 0 {
+		logger.Info("Registered schemas with failures", zap.Int("successful", successCount), zap.Int("failed", errorCount))
+	}
+
 	return nil
 }
 
@@ -262,6 +284,7 @@ func init() {
 	register.Flags().StringVar(&registerCfg.URL, "url", "", "Remote schema registry URL (required)")
 
 	// Authentication options
+	register.Flags().StringVar(&registerCfg.AuthType, "auth-type", "", "Authentication type (basic, bearer, api-key or none)")
 	register.Flags().StringVar(&registerCfg.Username, "username", "", "Username for basic authentication")
 	register.Flags().StringVar(&registerCfg.Password, "password", "", "Password for basic authentication")
 	register.Flags().StringVar(&registerCfg.BearerToken, "bearer-token", "", "Bearer token for authentication")
@@ -280,6 +303,7 @@ func init() {
 
 	// Bind flags to viper
 	_ = viper.BindPFlag("register.url", register.Flags().Lookup("url"))
+	_ = viper.BindPFlag("register.auth-type", register.Flags().Lookup("auth-type"))
 	_ = viper.BindPFlag("register.username", register.Flags().Lookup("username"))
 	_ = viper.BindPFlag("register.password", register.Flags().Lookup("password"))
 	_ = viper.BindPFlag("register.bearer-token", register.Flags().Lookup("bearer-token"))

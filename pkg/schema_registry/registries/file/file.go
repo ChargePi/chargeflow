@@ -1,6 +1,7 @@
-package registries
+package file
 
 import (
+	"context"
 	"encoding/json"
 	"strings"
 	"sync"
@@ -17,23 +18,13 @@ const (
 	ResponseSuffix = "Response"
 )
 
-type fileRegistryOptions struct {
-	// Whether to allow overwriting existing schemasPerOcppVersion in the registry or not.
-	overwrite bool
+var compiler *jsonschema.Compiler
+
+func init() {
+	compiler = jsonschema.NewCompiler()
 }
 
-type FileRegistryOption func(*fileRegistryOptions)
-
-// WithOverwrite allows overwriting existing schemasPerOcppVersion in the registry
-func WithOverwrite(overwrite bool) FileRegistryOption {
-	return func(o *fileRegistryOptions) {
-		o.overwrite = overwrite
-	}
-}
-
-var compiler = jsonschema.NewCompiler()
-
-type FileSchemaRegistry struct {
+type SchemaRegistry struct {
 	logger *zap.Logger
 	config fileRegistryOptions
 
@@ -42,7 +33,7 @@ type FileSchemaRegistry struct {
 	schemasPerOcppVersion map[ocpp.Version]map[string]*jsonschema.Schema
 }
 
-func NewFileSchemaRegistry(logger *zap.Logger, opts ...FileRegistryOption) *FileSchemaRegistry {
+func NewFileSchemaRegistry(logger *zap.Logger, opts ...RegistryOption) *SchemaRegistry {
 	// Default to not overwriting existing schemas
 	defaultOpts := fileRegistryOptions{
 		overwrite: false,
@@ -52,7 +43,7 @@ func NewFileSchemaRegistry(logger *zap.Logger, opts ...FileRegistryOption) *File
 		opt(&defaultOpts)
 	}
 
-	registry := &FileSchemaRegistry{
+	registry := &SchemaRegistry{
 		logger:                logger.Named("file_schema_registry"),
 		schemasPerOcppVersion: make(map[ocpp.Version]map[string]*jsonschema.Schema),
 		config:                defaultOpts,
@@ -68,7 +59,7 @@ func NewFileSchemaRegistry(logger *zap.Logger, opts ...FileRegistryOption) *File
 //
 // The rawSchema should be a valid JSON schema in raw format.
 // The action is the name of the OCPP action that this schema applies to. Must be suffixed with either "Request" or "Response".
-func (fsr *FileSchemaRegistry) RegisterSchema(ocppVersion ocpp.Version, action string, rawSchema json.RawMessage) error {
+func (fsr *SchemaRegistry) RegisterSchema(_ context.Context, ocppVersion ocpp.Version, action string, rawSchema json.RawMessage) error {
 	logger := fsr.logger.With(zap.String("ocppVersion", ocppVersion.String()), zap.String("action", action))
 	logger.Debug("Registering schema")
 
@@ -112,7 +103,7 @@ func (fsr *FileSchemaRegistry) RegisterSchema(ocppVersion ocpp.Version, action s
 }
 
 // GetSchema retrieves a schema for a specific OCPP version and action.
-func (fsr *FileSchemaRegistry) GetSchema(ocppVersion ocpp.Version, action string) (*jsonschema.Schema, bool) {
+func (fsr *SchemaRegistry) GetSchema(_ context.Context, ocppVersion ocpp.Version, action string) (*jsonschema.Schema, bool) {
 	fsr.logger.Debug("Getting schema", zap.String("ocppVersion", ocppVersion.String()), zap.String("action", action))
 
 	fsr.mu.RLock()
@@ -129,6 +120,6 @@ func (fsr *FileSchemaRegistry) GetSchema(ocppVersion ocpp.Version, action string
 	return nil, false
 }
 
-func (fsr *FileSchemaRegistry) Type() string {
+func (fsr *SchemaRegistry) Type() string {
 	return "file"
 }

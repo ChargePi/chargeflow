@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"embed"
 	"path/filepath"
 	"strings"
@@ -10,10 +11,11 @@ import (
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
 
+	"github.com/ChargePi/chargeflow/pkg/schema_registry/registries/file"
+
 	"github.com/ChargePi/chargeflow/internal/validation"
 	"github.com/ChargePi/chargeflow/pkg/ocpp"
 	"github.com/ChargePi/chargeflow/pkg/schema_registry"
-	"github.com/ChargePi/chargeflow/pkg/schema_registry/registries"
 )
 
 var (
@@ -43,15 +45,23 @@ var (
 	supportedOutputFormats = map[string]bool{".json": true, ".csv": true, ".txt": true}
 )
 
+const dirPrefix = "schemas/ocpp_"
+
 // registerSchemas registers all schemas from the embedded filesystem for a specific OCPP version.
-func registerSchemas(logger *zap.Logger, embeddedDir embed.FS, version ocpp.Version, registry schema_registry.SchemaRegistry) error {
+func registerSchemas(
+	ctx context.Context,
+	logger *zap.Logger,
+	embeddedDir embed.FS,
+	version ocpp.Version,
+	registry schema_registry.SchemaRegistry,
+) error {
 	logger.Debug("Registering OCPP schemas", zap.String("version", version.String()))
 
-	dirPath := "schemas/ocpp_" + strings.ReplaceAll(version.String(), ".", "")
+	dirPath := dirPrefix + strings.ReplaceAll(version.String(), ".", "")
 
 	// Exception for OCPP 1.6 Security Extension schemas
 	if embeddedDir == ocpp16Security {
-		dirPath = "schemas/ocpp_" + strings.ReplaceAll(version.String(), ".", "") + "_security"
+		dirPath = dirPrefix + strings.ReplaceAll(version.String(), ".", "") + "_security"
 	}
 
 	dir, err := embeddedDir.ReadDir(dirPath)
@@ -67,7 +77,7 @@ func registerSchemas(logger *zap.Logger, embeddedDir embed.FS, version ocpp.Vers
 			// Open and read the schema file
 			schemaData, err := embeddedDir.ReadFile(filepath.Join(dirPath, name))
 			if err != nil {
-				return errors.Wrapf(err, "unable to read OCPP 1.6 schema file: %s", name)
+				return errors.Wrapf(err, "unable to read OCPP schema file: %s", name)
 			}
 
 			// Note: Assuming that the file name is equivalent to the action name
@@ -75,9 +85,9 @@ func registerSchemas(logger *zap.Logger, embeddedDir embed.FS, version ocpp.Vers
 			// Also could determine the OCPP version from the schema ID.
 
 			action, _ := strings.CutSuffix(name, ".json")
-			err = registry.RegisterSchema(version, action, schemaData)
+			err = registry.RegisterSchema(ctx, version, action, schemaData)
 			if err != nil {
-				return errors.Wrapf(err, "unable to register OCPP 1.6 schema: %s", name)
+				return errors.Wrapf(err, "unable to register OCPP schema: %s", name)
 			}
 		}
 	}
@@ -101,33 +111,36 @@ var validate = &cobra.Command{
 
 		// todo provision registries based on config
 		switch registryType {
+		case "remote":
+			// remote.NewRemoteSchemaRegistry()
 		default:
-			registry = registries.NewFileSchemaRegistry(
+			registry = file.NewFileSchemaRegistry(
 				logger,
-				registries.WithOverwrite(overwrite),
+				file.WithOverwrite(overwrite),
 			)
 		}
 
 		// Populate the schema registry with OCPP schemas
+		ctx := cmd.Context()
 		var err error
 		switch ocppVersion {
 		case ocpp.V16.String():
-			err = registerSchemas(logger, ocpp16Schemas, ocpp.V16, registry)
+			err = registerSchemas(ctx, logger, ocpp16Schemas, ocpp.V16, registry)
 			if err != nil {
 				return err
 			}
 
-			err = registerSchemas(logger, ocpp16Security, ocpp.V16, registry)
+			err = registerSchemas(ctx, logger, ocpp16Security, ocpp.V16, registry)
 			if err != nil {
 				return err
 			}
 		case ocpp.V20.String():
-			err = registerSchemas(logger, ocpp201Schemas, ocpp.V20, registry)
+			err = registerSchemas(ctx, logger, ocpp201Schemas, ocpp.V20, registry)
 			if err != nil {
 				return err
 			}
 		case ocpp.V21.String():
-			err = registerSchemas(logger, ocpp21Schemas, ocpp.V21, registry)
+			err = registerSchemas(ctx, logger, ocpp21Schemas, ocpp.V21, registry)
 			if err != nil {
 				return err
 			}
@@ -136,7 +149,7 @@ var validate = &cobra.Command{
 		if overwrite {
 			ocppVersion := viper.GetString("ocpp.version")
 			version := ocpp.Version(ocppVersion)
-			err := registerSchemasFromDir(logger, registry, version, additionalOcppSchemasFolder)
+			err := registerSchemasFromDir(ctx, logger, registry, version, additionalOcppSchemasFolder)
 			if err != nil {
 				return err
 			}

@@ -1,4 +1,4 @@
-package registries
+package remote
 
 import (
 	"context"
@@ -16,6 +16,58 @@ import (
 
 	"github.com/ChargePi/chargeflow/pkg/ocpp"
 )
+
+const bootNotificationSchema = `{
+		"$schema": "http://json-schema.org/draft-04/schema#",
+		"id": "urn:OCPP:1.6:2019:12:BootNotificationRequest",
+		"title": "BootNotificationRequest",
+		"type": "object",
+		"properties": {
+			"chargePointVendor": {
+				"type": "string",
+				"maxLength": 20
+			},
+			"chargePointModel": {
+				"type": "string",
+				"maxLength": 20
+			}
+		},
+		"additionalProperties": false,
+		"required": ["chargePointVendor", "chargePointModel"]
+	}`
+
+const authorizationReqSchema = `{
+		"$schema": "http://json-schema.org/draft-04/schema#",
+		"id": "urn:OCPP:1.6:2019:12:AuthorizeRequest",
+		"title": "AuthorizeRequest",
+		"type": "object",
+		"properties": {
+			"idTag": {
+				"type": "string",
+				"maxLength": 20
+			}
+		},
+		"additionalProperties": false,
+		"required": ["idTag"]
+	}`
+
+const statusNotificationSchema = `{
+		"$schema": "http://json-schema.org/draft-04/schema#",
+		"id": "urn:OCPP:1.6:2019:12:StatusNotificationRequest",
+		"title": "StatusNotificationRequest",
+		"type": "object",
+		"properties": {
+			"connectorId": {
+				"type": "integer"
+			},
+			"status": {
+				"type": "string",
+				"enum": ["Available", "Preparing", "Charging", "SuspendedEVSE", "SuspendedEV", "Finishing", "Reserved", "Unavailable", "Faulted"]
+			}
+		},
+		"additionalProperties": false,
+		"required": ["connectorId", "status"]
+	}`
 
 type remoteRegistryIntegrationTestSuite struct {
 	suite.Suite
@@ -46,12 +98,14 @@ func (s *remoteRegistryIntegrationTestSuite) TearDownSuite() {
 	if s.redpandaContainer != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
+
 		err := s.redpandaContainer.Terminate(ctx)
 		s.NoError(err, "Failed to terminate Redpanda container")
 	}
 }
 
 func (s *remoteRegistryIntegrationTestSuite) TestRegisterSchema() {
+	ctx := context.Background()
 	registry, err := NewRemoteSchemaRegistry(
 		s.registryURL,
 		s.logger,
@@ -59,24 +113,7 @@ func (s *remoteRegistryIntegrationTestSuite) TestRegisterSchema() {
 	)
 	s.Require().NoError(err)
 
-	validSchema := json.RawMessage(`{
-		"$schema": "http://json-schema.org/draft-04/schema#",
-		"id": "urn:OCPP:1.6:2019:12:BootNotificationRequest",
-		"title": "BootNotificationRequest",
-		"type": "object",
-		"properties": {
-			"chargePointVendor": {
-				"type": "string",
-				"maxLength": 20
-			},
-			"chargePointModel": {
-				"type": "string",
-				"maxLength": 20
-			}
-		},
-		"additionalProperties": false,
-		"required": ["chargePointVendor", "chargePointModel"]
-	}`)
+	validSchema := json.RawMessage(bootNotificationSchema)
 
 	tests := []struct {
 		name        string
@@ -124,7 +161,7 @@ func (s *remoteRegistryIntegrationTestSuite) TestRegisterSchema() {
 
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
-			err := registry.RegisterSchema(tt.ocppVersion, tt.action, tt.schema)
+			err := registry.RegisterSchema(ctx, tt.ocppVersion, tt.action, tt.schema)
 			if tt.expectError {
 				s.Error(err)
 			} else {
@@ -135,6 +172,7 @@ func (s *remoteRegistryIntegrationTestSuite) TestRegisterSchema() {
 }
 
 func (s *remoteRegistryIntegrationTestSuite) TestGetSchema() {
+	ctx := context.Background()
 	registry, err := NewRemoteSchemaRegistry(
 		s.registryURL,
 		s.logger,
@@ -142,40 +180,29 @@ func (s *remoteRegistryIntegrationTestSuite) TestGetSchema() {
 	)
 	s.Require().NoError(err)
 
-	validSchema := json.RawMessage(`{
-		"$schema": "http://json-schema.org/draft-04/schema#",
-		"id": "urn:OCPP:1.6:2019:12:AuthorizeRequest",
-		"title": "AuthorizeRequest",
-		"type": "object",
-		"properties": {
-			"idTag": {
-				"type": "string",
-				"maxLength": 20
-			}
-		},
-		"additionalProperties": false,
-		"required": ["idTag"]
-	}`)
+	validSchema := json.RawMessage(authorizationReqSchema)
 
 	// First register a schema
-	err = registry.RegisterSchema(ocpp.V16, "AuthorizeRequest", validSchema)
+	err = registry.RegisterSchema(ctx, ocpp.V16, "AuthorizeRequest", validSchema)
 	s.Require().NoError(err)
 
 	// Test getting the schema
-	schema, found := registry.GetSchema(ocpp.V16, "AuthorizeRequest")
+	schema, found := registry.GetSchema(ctx, ocpp.V16, "AuthorizeRequest")
 	s.True(found, "Schema should be found")
 	s.NotNil(schema, "Schema should not be nil")
 
 	// Test getting non-existent schema
-	_, found = registry.GetSchema(ocpp.V16, "NonExistentRequest")
+	_, found = registry.GetSchema(ctx, ocpp.V16, "NonExistentRequest")
 	s.False(found, "Non-existent schema should not be found")
 
 	// Test getting schema for non-existent OCPP version
-	_, found = registry.GetSchema(ocpp.V20, "AuthorizeRequest")
+	_, found = registry.GetSchema(ctx, ocpp.V20, "AuthorizeRequest")
 	s.False(found, "Schema for different OCPP version should not be found")
 }
 
 func (s *remoteRegistryIntegrationTestSuite) TestGetSchema_Caching() {
+	ctx := context.Background()
+
 	// Use a short cache refresh duration for testing
 	cacheRefresh := 2 * time.Second
 	registry, err := NewRemoteSchemaRegistry(
@@ -186,35 +213,19 @@ func (s *remoteRegistryIntegrationTestSuite) TestGetSchema_Caching() {
 	)
 	s.Require().NoError(err)
 
-	validSchema := json.RawMessage(`{
-		"$schema": "http://json-schema.org/draft-04/schema#",
-		"id": "urn:OCPP:1.6:2019:12:StatusNotificationRequest",
-		"title": "StatusNotificationRequest",
-		"type": "object",
-		"properties": {
-			"connectorId": {
-				"type": "integer"
-			},
-			"status": {
-				"type": "string",
-				"enum": ["Available", "Preparing", "Charging", "SuspendedEVSE", "SuspendedEV", "Finishing", "Reserved", "Unavailable", "Faulted"]
-			}
-		},
-		"additionalProperties": false,
-		"required": ["connectorId", "status"]
-	}`)
+	validSchema := json.RawMessage(statusNotificationSchema)
 
 	// Register the schema
-	err = registry.RegisterSchema(ocpp.V16, "StatusNotificationRequest", validSchema)
+	err = registry.RegisterSchema(ctx, ocpp.V16, "StatusNotificationRequest", validSchema)
 	s.Require().NoError(err)
 
 	// First fetch - should fetch from remote
-	schema1, found := registry.GetSchema(ocpp.V16, "StatusNotificationRequest")
+	schema1, found := registry.GetSchema(ctx, ocpp.V16, "StatusNotificationRequest")
 	s.True(found)
 	s.NotNil(schema1)
 
 	// Second fetch immediately - should use cache
-	schema2, found := registry.GetSchema(ocpp.V16, "StatusNotificationRequest")
+	schema2, found := registry.GetSchema(ctx, ocpp.V16, "StatusNotificationRequest")
 	s.True(found)
 	s.NotNil(schema2)
 	s.Equal(schema1, schema2, "Should return the same schema instance from cache")
@@ -223,13 +234,14 @@ func (s *remoteRegistryIntegrationTestSuite) TestGetSchema_Caching() {
 	time.Sleep(cacheRefresh + 500*time.Millisecond)
 
 	// Third fetch after cache expiry - should fetch from remote again
-	schema3, found := registry.GetSchema(ocpp.V16, "StatusNotificationRequest")
+	schema3, found := registry.GetSchema(ctx, ocpp.V16, "StatusNotificationRequest")
 	s.True(found)
 	s.NotNil(schema3)
 	// Note: schema3 will be a new instance, but should validate the same data
 }
 
 func (s *remoteRegistryIntegrationTestSuite) TestGetSchema_MultipleVersions() {
+	ctx := context.Background()
 	registry, err := NewRemoteSchemaRegistry(
 		s.registryURL,
 		s.logger,
@@ -261,20 +273,21 @@ func (s *remoteRegistryIntegrationTestSuite) TestGetSchema_MultipleVersions() {
 	}`)
 
 	// Register first version
-	err = registry.RegisterSchema(ocpp.V16, "HeartbeatRequest", schemaV1)
+	err = registry.RegisterSchema(ctx, ocpp.V16, "HeartbeatRequest", schemaV1)
 	s.Require().NoError(err)
 
 	// Register second version (should create a new version in the registry)
-	err = registry.RegisterSchema(ocpp.V16, "HeartbeatRequest", schemaV2)
+	err = registry.RegisterSchema(ctx, ocpp.V16, "HeartbeatRequest", schemaV2)
 	s.Require().NoError(err)
 
 	// GetSchema should return the latest version
-	schema, found := registry.GetSchema(ocpp.V16, "HeartbeatRequest")
+	schema, found := registry.GetSchema(ctx, ocpp.V16, "HeartbeatRequest")
 	s.True(found)
 	s.NotNil(schema)
 }
 
 func (s *remoteRegistryIntegrationTestSuite) TestGetSchema_InvalidInputs() {
+	ctx := context.Background()
 	registry, err := NewRemoteSchemaRegistry(
 		s.registryURL,
 		s.logger,
@@ -301,7 +314,7 @@ func (s *remoteRegistryIntegrationTestSuite) TestGetSchema_InvalidInputs() {
 
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
-			schema, found := registry.GetSchema(tt.ocppVersion, tt.action)
+			schema, found := registry.GetSchema(ctx, tt.ocppVersion, tt.action)
 			s.False(found, "Should not find schema for invalid input")
 			s.Nil(schema, "Schema should be nil for invalid input")
 		})
@@ -309,6 +322,7 @@ func (s *remoteRegistryIntegrationTestSuite) TestGetSchema_InvalidInputs() {
 }
 
 func (s *remoteRegistryIntegrationTestSuite) TestGetSchema_DifferentOCPPVersions() {
+	ctx := context.Background()
 	registry, err := NewRemoteSchemaRegistry(
 		s.registryURL,
 		s.logger,
@@ -345,18 +359,18 @@ func (s *remoteRegistryIntegrationTestSuite) TestGetSchema_DifferentOCPPVersions
 	}`)
 
 	// Register schemas for different OCPP versions
-	err = registry.RegisterSchema(ocpp.V16, "StartTransactionRequest", schema16)
+	err = registry.RegisterSchema(ctx, ocpp.V16, "StartTransactionRequest", schema16)
 	s.Require().NoError(err)
 
-	err = registry.RegisterSchema(ocpp.V20, "StartTransactionRequest", schema20)
+	err = registry.RegisterSchema(ctx, ocpp.V20, "StartTransactionRequest", schema20)
 	s.Require().NoError(err)
 
 	// Verify both schemas can be retrieved independently
-	schema1, found1 := registry.GetSchema(ocpp.V16, "StartTransactionRequest")
+	schema1, found1 := registry.GetSchema(ctx, ocpp.V16, "StartTransactionRequest")
 	s.True(found1, "OCPP 1.6 schema should be found")
 	s.NotNil(schema1)
 
-	schema2, found2 := registry.GetSchema(ocpp.V20, "StartTransactionRequest")
+	schema2, found2 := registry.GetSchema(ctx, ocpp.V20, "StartTransactionRequest")
 	s.True(found2, "OCPP 2.0 schema should be found")
 	s.NotNil(schema2)
 
@@ -365,6 +379,7 @@ func (s *remoteRegistryIntegrationTestSuite) TestGetSchema_DifferentOCPPVersions
 }
 
 func (s *remoteRegistryIntegrationTestSuite) TestGetSchema_ResponseSuffix() {
+	ctx := context.Background()
 	registry, err := NewRemoteSchemaRegistry(
 		s.registryURL,
 		s.logger,
@@ -395,11 +410,11 @@ func (s *remoteRegistryIntegrationTestSuite) TestGetSchema_ResponseSuffix() {
 	}`)
 
 	// Register response schema
-	err = registry.RegisterSchema(ocpp.V16, "BootNotificationResponse", responseSchema)
+	err = registry.RegisterSchema(ctx, ocpp.V16, "BootNotificationResponse", responseSchema)
 	s.Require().NoError(err)
 
 	// Retrieve response schema
-	schema, found := registry.GetSchema(ocpp.V16, "BootNotificationResponse")
+	schema, found := registry.GetSchema(ctx, ocpp.V16, "BootNotificationResponse")
 	s.True(found, "Response schema should be found")
 	s.NotNil(schema, "Response schema should not be nil")
 }
@@ -414,13 +429,13 @@ func TestRemoteRegistryIntegration(t *testing.T) {
 func TestAuthOptions(t *testing.T) {
 	tests := []struct {
 		name           string
-		opts           []RemoteOptions
+		opts           []Options
 		expectedHeader string
 		expectedValue  string
 	}{
 		{
 			name: "Basic Auth",
-			opts: []RemoteOptions{
+			opts: []Options{
 				WithBasicAuth("testuser", "testpass"),
 			},
 			expectedHeader: "Authorization",
@@ -428,7 +443,7 @@ func TestAuthOptions(t *testing.T) {
 		},
 		{
 			name: "Bearer Token",
-			opts: []RemoteOptions{
+			opts: []Options{
 				WithBearerToken("test-token-123"),
 			},
 			expectedHeader: "Authorization",
@@ -436,7 +451,7 @@ func TestAuthOptions(t *testing.T) {
 		},
 		{
 			name: "API Key with default header",
-			opts: []RemoteOptions{
+			opts: []Options{
 				WithAPIKey("test-api-key", ""),
 			},
 			expectedHeader: "X-API-Key",
@@ -444,7 +459,7 @@ func TestAuthOptions(t *testing.T) {
 		},
 		{
 			name: "API Key with custom header",
-			opts: []RemoteOptions{
+			opts: []Options{
 				WithAPIKey("test-api-key", "X-Custom-API-Key"),
 			},
 			expectedHeader: "X-Custom-API-Key",
@@ -452,7 +467,7 @@ func TestAuthOptions(t *testing.T) {
 		},
 		{
 			name: "Custom Header",
-			opts: []RemoteOptions{
+			opts: []Options{
 				WithCustomHeader("X-Custom-Auth", "custom-value"),
 			},
 			expectedHeader: "X-Custom-Auth",

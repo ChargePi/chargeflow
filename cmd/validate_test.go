@@ -1,12 +1,13 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
-	"github.com/ChargePi/chargeflow/pkg/schema_registry/registries"
+	"github.com/ChargePi/chargeflow/pkg/schema_registry/registries/file"
 
 	"github.com/spf13/viper"
 	"go.uber.org/zap"
@@ -29,7 +30,7 @@ var (
 
 func Test_registerAdditionalSchemas(t *testing.T) {
 	logger := zap.L()
-	registry = registries.NewFileSchemaRegistry(logger)
+	registry = file.NewFileSchemaRegistry(logger)
 
 	tests := []struct {
 		name               string
@@ -80,8 +81,9 @@ func Test_registerAdditionalSchemas(t *testing.T) {
 			r.NoError(err)
 
 			// Call the function to register additional schemas
+			ctx := context.Background()
 			version := ocpp.Version(test.defaultOcppVersion)
-			err = registerSchemasFromDir(logger, registry, version, tempDir)
+			err = registerSchemasFromDir(ctx, logger, registry, version, tempDir)
 			if test.expected != nil {
 				// The shared function returns aggregated errors, so we check that an error occurred
 				assert.Error(t, err)

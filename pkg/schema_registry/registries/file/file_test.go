@@ -1,6 +1,7 @@
-package registries
+package file
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -21,18 +22,19 @@ func (s *fileRegistryTestSuite) SetupSuite() {
 }
 
 func (s *fileRegistryTestSuite) TestRegisterSchema() {
+	ctx := context.Background()
 	tests := []struct {
 		name         string
-		preconfigure func(registry *FileSchemaRegistry)
+		preconfigure func(registry *SchemaRegistry)
 		ocppVersion  ocpp.Version
 		action       string
 		schema       json.RawMessage
-		opts         []FileRegistryOption
+		opts         []RegistryOption
 		expectedErr  error
 	}{
 		{
 			name:         "Register schema for OCPP 1.6",
-			preconfigure: func(registry *FileSchemaRegistry) {},
+			preconfigure: func(registry *SchemaRegistry) {},
 			ocppVersion:  ocpp.V16,
 			action:       "AuthorizeRequest",
 			schema:       json.RawMessage(`{ "$schema": "http://json-schema.org/draft-04/schema#", "id": "urn:OCPP:1.6:2019:12:AuthorizeRequest", "title": "AuthorizeRequest", "type": "object", "properties": { "idTag": { "type": "string", "maxLength": 20 } }, "additionalProperties": false, "required": [ "idTag" ]}`),
@@ -41,7 +43,7 @@ func (s *fileRegistryTestSuite) TestRegisterSchema() {
 		},
 		{
 			name:         "Register schema for OCPP 2.0",
-			preconfigure: func(registry *FileSchemaRegistry) {},
+			preconfigure: func(registry *SchemaRegistry) {},
 			ocppVersion:  ocpp.V20,
 			action:       "AuthorizeRequest",
 			schema:       json.RawMessage(`{ "$schema": "http://json-schema.org/draft-04/schema#", "id": "urn:OCPP:1.6:2019:12:AuthorizeRequest", "title": "AuthorizeRequest", "type": "object", "properties": { "idTag": { "type": "string", "maxLength": 20 } }, "additionalProperties": false, "required": [ "idTag" ]}`),
@@ -75,23 +77,23 @@ func (s *fileRegistryTestSuite) TestRegisterSchema() {
 		{
 			name:        "Schema already registered, overwrite disabled",
 			ocppVersion: ocpp.V16,
-			preconfigure: func(registry *FileSchemaRegistry) {
-				_ = registry.RegisterSchema(ocpp.V16, "AuthorizeRequest", json.RawMessage(`{ "$schema": "http://json-schema.org/draft-04/schema#", "id": "urn:OCPP:1.6:2019:12:AuthorizeRequest", "title": "AuthorizeRequest", "type": "object", "properties": { "idTag": { "type": "string", "maxLength": 20 } }, "additionalProperties": false, "required": [ "idTag" ]}`))
+			preconfigure: func(registry *SchemaRegistry) {
+				_ = registry.RegisterSchema(ctx, ocpp.V16, "AuthorizeRequest", json.RawMessage(`{ "$schema": "http://json-schema.org/draft-04/schema#", "id": "urn:OCPP:1.6:2019:12:AuthorizeRequest", "title": "AuthorizeRequest", "type": "object", "properties": { "idTag": { "type": "string", "maxLength": 20 } }, "additionalProperties": false, "required": [ "idTag" ]}`))
 			},
 			action:      "AuthorizeRequest",
 			schema:      json.RawMessage(`{ "$schema": "http://json-schema.org/draft-04/schema#", "id": "urn:OCPP:1.6:2019:12:AuthorizeRequest", "title": "AuthorizeRequest", "type": "object", "properties": { "idTag": { "type": "string", "maxLength": 20 } }, "additionalProperties": false, "required": [ "idTag" ]}`),
-			opts:        []FileRegistryOption{WithOverwrite(false)},
+			opts:        []RegistryOption{WithOverwrite(false)},
 			expectedErr: errors.New("schema for action AuthorizeRequest already exists for OCPP version 1.6"),
 		},
 		{
 			name:        "Schema already registered, overwrite enabled",
 			ocppVersion: ocpp.V16,
-			preconfigure: func(registry *FileSchemaRegistry) {
-				_ = registry.RegisterSchema(ocpp.V16, "AuthorizeRequest", json.RawMessage(`{ "$schema": "http://json-schema.org/draft-04/schema#", "id": "urn:OCPP:1.6:2019:12:AuthorizeRequest", "title": "AuthorizeRequest", "type": "object", "properties": { "idTag": { "type": "string", "maxLength": 20 } }, "additionalProperties": false, "required": [ "idTag" ]}`))
+			preconfigure: func(registry *SchemaRegistry) {
+				_ = registry.RegisterSchema(ctx, ocpp.V16, "AuthorizeRequest", json.RawMessage(`{ "$schema": "http://json-schema.org/draft-04/schema#", "id": "urn:OCPP:1.6:2019:12:AuthorizeRequest", "title": "AuthorizeRequest", "type": "object", "properties": { "idTag": { "type": "string", "maxLength": 20 } }, "additionalProperties": false, "required": [ "idTag" ]}`))
 			},
 			action:      "AuthorizeRequest",
 			schema:      json.RawMessage(`{ "$schema": "http://json-schema.org/draft-04/schema#", "id": "urn:OCPP:1.6:2019:12:AuthorizeRequest", "title": "AuthorizeRequest", "type": "object", "properties": { "idTag": { "type": "string", "maxLength": 20 } }, "additionalProperties": false, "required": [ "idTag" ]}`),
-			opts:        []FileRegistryOption{WithOverwrite(true)},
+			opts:        []RegistryOption{WithOverwrite(true)},
 			expectedErr: nil,
 		},
 	}
@@ -99,7 +101,7 @@ func (s *fileRegistryTestSuite) TestRegisterSchema() {
 	for _, tt := range tests {
 		s.Run(tt.name, func() {
 			if tt.opts == nil {
-				tt.opts = []FileRegistryOption{}
+				tt.opts = []RegistryOption{}
 			}
 
 			registry := NewFileSchemaRegistry(s.logger, tt.opts...)
@@ -108,7 +110,7 @@ func (s *fileRegistryTestSuite) TestRegisterSchema() {
 				tt.preconfigure(registry)
 			}
 
-			err := registry.RegisterSchema(tt.ocppVersion, tt.action, tt.schema)
+			err := registry.RegisterSchema(ctx, tt.ocppVersion, tt.action, tt.schema)
 			if tt.expectedErr != nil {
 				s.ErrorContains(err, tt.expectedErr.Error())
 			} else {
@@ -119,17 +121,18 @@ func (s *fileRegistryTestSuite) TestRegisterSchema() {
 }
 
 func (s *fileRegistryTestSuite) TestGetSchema() {
+	ctx := context.Background()
 	tests := []struct {
 		name          string
-		preconfigure  func(registry *FileSchemaRegistry)
+		preconfigure  func(registry *SchemaRegistry)
 		ocppVersion   ocpp.Version
 		action        string
 		expectedFound bool
 	}{
 		{
 			name: "Get schema for OCPP 1.6",
-			preconfigure: func(registry *FileSchemaRegistry) {
-				_ = registry.RegisterSchema(ocpp.V16, "AuthorizeRequest", json.RawMessage(`{ "$schema": "http://json-schema.org/draft-04/schema#", "id": "urn:OCPP:1.6:2019:12:AuthorizeRequest", "title": "AuthorizeRequest", "type": "object", "properties": { "idTag": { "type": "string", "maxLength": 20 } }, "additionalProperties": false, "required": [ "idTag" ]}`))
+			preconfigure: func(registry *SchemaRegistry) {
+				_ = registry.RegisterSchema(ctx, ocpp.V16, "AuthorizeRequest", json.RawMessage(`{ "$schema": "http://json-schema.org/draft-04/schema#", "id": "urn:OCPP:1.6:2019:12:AuthorizeRequest", "title": "AuthorizeRequest", "type": "object", "properties": { "idTag": { "type": "string", "maxLength": 20 } }, "additionalProperties": false, "required": [ "idTag" ]}`))
 			},
 			ocppVersion:   ocpp.V16,
 			action:        "AuthorizeRequest",
@@ -137,8 +140,8 @@ func (s *fileRegistryTestSuite) TestGetSchema() {
 		},
 		{
 			name: "Get schema for OCPP 2.0",
-			preconfigure: func(registry *FileSchemaRegistry) {
-				_ = registry.RegisterSchema(ocpp.V20, "AuthorizeRequest", json.RawMessage(`{ "$schema": "http://json-schema.org/draft-04/schema#", "id": "urn:OCPP:1.6:2019:12:AuthorizeRequest", "title": "AuthorizeRequest", "type": "object", "properties": { "idTag": { "type": "string", "maxLength": 20 } }, "additionalProperties": false, "required": [ "idTag" ]}`))
+			preconfigure: func(registry *SchemaRegistry) {
+				_ = registry.RegisterSchema(ctx, ocpp.V20, "AuthorizeRequest", json.RawMessage(`{ "$schema": "http://json-schema.org/draft-04/schema#", "id": "urn:OCPP:1.6:2019:12:AuthorizeRequest", "title": "AuthorizeRequest", "type": "object", "properties": { "idTag": { "type": "string", "maxLength": 20 } }, "additionalProperties": false, "required": [ "idTag" ]}`))
 			},
 			ocppVersion:   ocpp.V20,
 			action:        "AuthorizeRequest",
@@ -166,7 +169,7 @@ func (s *fileRegistryTestSuite) TestGetSchema() {
 				test.preconfigure(registry)
 			}
 
-			schema, found := registry.GetSchema(test.ocppVersion, test.action)
+			schema, found := registry.GetSchema(ctx, test.ocppVersion, test.action)
 			s.Equal(test.expectedFound, found)
 			if test.expectedFound {
 				s.NotNil(schema)
@@ -180,19 +183,19 @@ func (s *fileRegistryTestSuite) TestGetSchema() {
 func (s *fileRegistryTestSuite) TestOptions() {
 	tests := []struct {
 		name     string
-		opts     []FileRegistryOption
+		opts     []RegistryOption
 		expected fileRegistryOptions
 	}{
 		{
 			name: "default options",
-			opts: []FileRegistryOption{},
+			opts: []RegistryOption{},
 			expected: fileRegistryOptions{
 				overwrite: false,
 			},
 		},
 		{
 			name: "WithOverwrite",
-			opts: []FileRegistryOption{
+			opts: []RegistryOption{
 				WithOverwrite(true),
 			},
 			expected: fileRegistryOptions{

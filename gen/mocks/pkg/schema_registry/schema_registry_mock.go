@@ -5,10 +5,10 @@
 package mock_schema_registry
 
 import (
+	"context"
 	"encoding/json"
 
 	"github.com/ChargePi/chargeflow/pkg/ocpp"
-	"github.com/ChargePi/chargeflow/pkg/schema_registry"
 	"github.com/kaptinlin/jsonschema"
 	mock "github.com/stretchr/testify/mock"
 )
@@ -41,8 +41,8 @@ func (_m *MockSchemaRegistry) EXPECT() *MockSchemaRegistry_Expecter {
 }
 
 // GetSchema provides a mock function for the type MockSchemaRegistry
-func (_mock *MockSchemaRegistry) GetSchema(ocppVersion ocpp.Version, action string) (*jsonschema.Schema, bool) {
-	ret := _mock.Called(ocppVersion, action)
+func (_mock *MockSchemaRegistry) GetSchema(ctx context.Context, ocppVersion ocpp.Version, action string) (*jsonschema.Schema, bool) {
+	ret := _mock.Called(ctx, ocppVersion, action)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetSchema")
@@ -50,18 +50,18 @@ func (_mock *MockSchemaRegistry) GetSchema(ocppVersion ocpp.Version, action stri
 
 	var r0 *jsonschema.Schema
 	var r1 bool
-	if returnFunc, ok := ret.Get(0).(func(ocpp.Version, string) (*jsonschema.Schema, bool)); ok {
-		return returnFunc(ocppVersion, action)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, ocpp.Version, string) (*jsonschema.Schema, bool)); ok {
+		return returnFunc(ctx, ocppVersion, action)
 	}
-	if returnFunc, ok := ret.Get(0).(func(ocpp.Version, string) *jsonschema.Schema); ok {
-		r0 = returnFunc(ocppVersion, action)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, ocpp.Version, string) *jsonschema.Schema); ok {
+		r0 = returnFunc(ctx, ocppVersion, action)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(*jsonschema.Schema)
 		}
 	}
-	if returnFunc, ok := ret.Get(1).(func(ocpp.Version, string) bool); ok {
-		r1 = returnFunc(ocppVersion, action)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, ocpp.Version, string) bool); ok {
+		r1 = returnFunc(ctx, ocppVersion, action)
 	} else {
 		r1 = ret.Get(1).(bool)
 	}
@@ -74,25 +74,31 @@ type MockSchemaRegistry_GetSchema_Call struct {
 }
 
 // GetSchema is a helper method to define mock.On call
+//   - ctx context.Context
 //   - ocppVersion ocpp.Version
 //   - action string
-func (_e *MockSchemaRegistry_Expecter) GetSchema(ocppVersion interface{}, action interface{}) *MockSchemaRegistry_GetSchema_Call {
-	return &MockSchemaRegistry_GetSchema_Call{Call: _e.mock.On("GetSchema", ocppVersion, action)}
+func (_e *MockSchemaRegistry_Expecter) GetSchema(ctx interface{}, ocppVersion interface{}, action interface{}) *MockSchemaRegistry_GetSchema_Call {
+	return &MockSchemaRegistry_GetSchema_Call{Call: _e.mock.On("GetSchema", ctx, ocppVersion, action)}
 }
 
-func (_c *MockSchemaRegistry_GetSchema_Call) Run(run func(ocppVersion ocpp.Version, action string)) *MockSchemaRegistry_GetSchema_Call {
+func (_c *MockSchemaRegistry_GetSchema_Call) Run(run func(ctx context.Context, ocppVersion ocpp.Version, action string)) *MockSchemaRegistry_GetSchema_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 ocpp.Version
+		var arg0 context.Context
 		if args[0] != nil {
-			arg0 = args[0].(ocpp.Version)
+			arg0 = args[0].(context.Context)
 		}
-		var arg1 string
+		var arg1 ocpp.Version
 		if args[1] != nil {
-			arg1 = args[1].(string)
+			arg1 = args[1].(ocpp.Version)
+		}
+		var arg2 string
+		if args[2] != nil {
+			arg2 = args[2].(string)
 		}
 		run(
 			arg0,
 			arg1,
+			arg2,
 		)
 	})
 	return _c
@@ -103,28 +109,22 @@ func (_c *MockSchemaRegistry_GetSchema_Call) Return(schema *jsonschema.Schema, b
 	return _c
 }
 
-func (_c *MockSchemaRegistry_GetSchema_Call) RunAndReturn(run func(ocppVersion ocpp.Version, action string) (*jsonschema.Schema, bool)) *MockSchemaRegistry_GetSchema_Call {
+func (_c *MockSchemaRegistry_GetSchema_Call) RunAndReturn(run func(ctx context.Context, ocppVersion ocpp.Version, action string) (*jsonschema.Schema, bool)) *MockSchemaRegistry_GetSchema_Call {
 	_c.Call.Return(run)
 	return _c
 }
 
 // RegisterSchema provides a mock function for the type MockSchemaRegistry
-func (_mock *MockSchemaRegistry) RegisterSchema(ocppVersion ocpp.Version, action string, rawSchema json.RawMessage, opts ...schema_registry.Option) error {
-	var tmpRet mock.Arguments
-	if len(opts) > 0 {
-		tmpRet = _mock.Called(ocppVersion, action, rawSchema, opts)
-	} else {
-		tmpRet = _mock.Called(ocppVersion, action, rawSchema)
-	}
-	ret := tmpRet
+func (_mock *MockSchemaRegistry) RegisterSchema(ctx context.Context, ocppVersion ocpp.Version, action string, rawSchema json.RawMessage) error {
+	ret := _mock.Called(ctx, ocppVersion, action, rawSchema)
 
 	if len(ret) == 0 {
 		panic("no return value specified for RegisterSchema")
 	}
 
 	var r0 error
-	if returnFunc, ok := ret.Get(0).(func(ocpp.Version, string, json.RawMessage, ...schema_registry.Option) error); ok {
-		r0 = returnFunc(ocppVersion, action, rawSchema, opts...)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, ocpp.Version, string, json.RawMessage) error); ok {
+		r0 = returnFunc(ctx, ocppVersion, action, rawSchema)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -137,40 +137,37 @@ type MockSchemaRegistry_RegisterSchema_Call struct {
 }
 
 // RegisterSchema is a helper method to define mock.On call
+//   - ctx context.Context
 //   - ocppVersion ocpp.Version
 //   - action string
 //   - rawSchema json.RawMessage
-//   - opts ...schema_registry.Option
-func (_e *MockSchemaRegistry_Expecter) RegisterSchema(ocppVersion interface{}, action interface{}, rawSchema interface{}, opts ...interface{}) *MockSchemaRegistry_RegisterSchema_Call {
-	return &MockSchemaRegistry_RegisterSchema_Call{Call: _e.mock.On("RegisterSchema",
-		append([]interface{}{ocppVersion, action, rawSchema}, opts...)...)}
+func (_e *MockSchemaRegistry_Expecter) RegisterSchema(ctx interface{}, ocppVersion interface{}, action interface{}, rawSchema interface{}) *MockSchemaRegistry_RegisterSchema_Call {
+	return &MockSchemaRegistry_RegisterSchema_Call{Call: _e.mock.On("RegisterSchema", ctx, ocppVersion, action, rawSchema)}
 }
 
-func (_c *MockSchemaRegistry_RegisterSchema_Call) Run(run func(ocppVersion ocpp.Version, action string, rawSchema json.RawMessage, opts ...schema_registry.Option)) *MockSchemaRegistry_RegisterSchema_Call {
+func (_c *MockSchemaRegistry_RegisterSchema_Call) Run(run func(ctx context.Context, ocppVersion ocpp.Version, action string, rawSchema json.RawMessage)) *MockSchemaRegistry_RegisterSchema_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		var arg0 ocpp.Version
+		var arg0 context.Context
 		if args[0] != nil {
-			arg0 = args[0].(ocpp.Version)
+			arg0 = args[0].(context.Context)
 		}
-		var arg1 string
+		var arg1 ocpp.Version
 		if args[1] != nil {
-			arg1 = args[1].(string)
+			arg1 = args[1].(ocpp.Version)
 		}
-		var arg2 json.RawMessage
+		var arg2 string
 		if args[2] != nil {
-			arg2 = args[2].(json.RawMessage)
+			arg2 = args[2].(string)
 		}
-		var arg3 []schema_registry.Option
-		var variadicArgs []schema_registry.Option
-		if len(args) > 3 {
-			variadicArgs = args[3].([]schema_registry.Option)
+		var arg3 json.RawMessage
+		if args[3] != nil {
+			arg3 = args[3].(json.RawMessage)
 		}
-		arg3 = variadicArgs
 		run(
 			arg0,
 			arg1,
 			arg2,
-			arg3...,
+			arg3,
 		)
 	})
 	return _c
@@ -181,7 +178,51 @@ func (_c *MockSchemaRegistry_RegisterSchema_Call) Return(err error) *MockSchemaR
 	return _c
 }
 
-func (_c *MockSchemaRegistry_RegisterSchema_Call) RunAndReturn(run func(ocppVersion ocpp.Version, action string, rawSchema json.RawMessage, opts ...schema_registry.Option) error) *MockSchemaRegistry_RegisterSchema_Call {
+func (_c *MockSchemaRegistry_RegisterSchema_Call) RunAndReturn(run func(ctx context.Context, ocppVersion ocpp.Version, action string, rawSchema json.RawMessage) error) *MockSchemaRegistry_RegisterSchema_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// Type provides a mock function for the type MockSchemaRegistry
+func (_mock *MockSchemaRegistry) Type() string {
+	ret := _mock.Called()
+
+	if len(ret) == 0 {
+		panic("no return value specified for Type")
+	}
+
+	var r0 string
+	if returnFunc, ok := ret.Get(0).(func() string); ok {
+		r0 = returnFunc()
+	} else {
+		r0 = ret.Get(0).(string)
+	}
+	return r0
+}
+
+// MockSchemaRegistry_Type_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Type'
+type MockSchemaRegistry_Type_Call struct {
+	*mock.Call
+}
+
+// Type is a helper method to define mock.On call
+func (_e *MockSchemaRegistry_Expecter) Type() *MockSchemaRegistry_Type_Call {
+	return &MockSchemaRegistry_Type_Call{Call: _e.mock.On("Type")}
+}
+
+func (_c *MockSchemaRegistry_Type_Call) Run(run func()) *MockSchemaRegistry_Type_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run()
+	})
+	return _c
+}
+
+func (_c *MockSchemaRegistry_Type_Call) Return(s string) *MockSchemaRegistry_Type_Call {
+	_c.Call.Return(s)
+	return _c
+}
+
+func (_c *MockSchemaRegistry_Type_Call) RunAndReturn(run func() string) *MockSchemaRegistry_Type_Call {
 	_c.Call.Return(run)
 	return _c
 }

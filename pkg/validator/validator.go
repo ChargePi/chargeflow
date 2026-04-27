@@ -1,6 +1,7 @@
 package validator
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/pkg/errors"
@@ -133,12 +134,12 @@ func (v *Validator) validatePayload(ocppVersion ocpp.Version, payload interface{
 	switch v.registry.Type() {
 	case "remote":
 		// For remote, we can validate the payload against the schema directly
-	case "local":
+	case "file":
 
 	}
 
 	// Get the schema for the action and OCPP version
-	schema, found := v.registry.GetSchema(ocppVersion, action)
+	schema, found := v.registry.GetSchema(context.Background(), ocppVersion, action)
 	if !found {
 		return errors.Errorf("no schema found for action %s in OCPP version %s", action, ocppVersion)
 	}
