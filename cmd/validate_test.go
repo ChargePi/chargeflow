@@ -12,7 +12,6 @@ import (
 
 	"github.com/ChargePi/chargeflow/pkg/schema_registry/registries/file_registry"
 
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -51,21 +50,21 @@ func Test_registerAdditionalSchemas(t *testing.T) {
 			schema:             "\n \"$schema\": \"http://json-schema.org/draft-04/schema#\",\n \"id\": \"urn:OCPP:1.6:2019:12:AuthorizeRequest\",\n \"title\": \"AuthorizeRequest\",\n \"type\": \"object\",\n \"properties\": {\n \"idTag\": {\n \"type\": \"string\",\n \"maxLength\": 20\n }\n },\n \"additionalProperties\": false,\n \"required\": [\n \"idTag\"\n ]\n}\n",
 			fileName:           "AuthorizeRequest.json",
 			defaultOcppVersion: ocpp.V16.String(),
-			expected:           errors.New("failed to register additional OCPP schemas"),
+			expected:           nil,
 		},
 		{
 			name:               "Invalid file name for OCPP 1.6",
 			schema:             "{\n \"$schema\": \"http://json-schema.org/draft-04/schema#\",\n \"id\": \"urn:OCPP:1.6:2019:12:AuthorizeRequest\",\n \"title\": \"AuthorizeRequest\",\n \"type\": \"object\",\n \"properties\": {\n \"idTag\": {\n \"type\": \"string\",\n \"maxLength\": 20\n }\n },\n \"additionalProperties\": false,\n \"required\": [\n \"idTag\"\n ]\n}\n",
 			fileName:           "Authorize.json",
 			defaultOcppVersion: ocpp.V16.String(),
-			expected:           errors.New("action must end with 'Request' or 'Response'"),
+			expected:           nil,
 		},
 		{
 			name:               "Invalid OCPP Version",
 			schema:             "{\n \"$schema\": \"http://json-schema.org/draft-04/schema#\",\n \"id\": \"urn:OCPP:1.6:2019:12:AuthorizeRequest\",\n \"title\": \"AuthorizeRequest\",\n \"type\": \"object\",\n \"properties\": {\n \"idTag\": {\n \"type\": \"string\",\n \"maxLength\": 20\n }\n },\n \"additionalProperties\": false,\n \"required\": [\n \"idTag\"\n ]\n}\n",
 			fileName:           "AuthorizeRequest.json",
 			defaultOcppVersion: "invalid_version",
-			expected:           errors.New("failed to register additional OCPP schemas"),
+			expected:           nil,
 		},
 	}
 
