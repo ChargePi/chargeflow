@@ -28,7 +28,7 @@ func TestCSVStrategy_Write(t *testing.T) {
 		Statistics:          report.Statistics{},
 	}
 
-	s := csvStrategy{}
+	s := csvWriter{}
 	require.NoError(t, s.Write(path, r))
 
 	b, err := os.ReadFile(path)

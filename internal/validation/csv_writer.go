@@ -2,16 +2,23 @@ package validation
 
 import (
 	"encoding/csv"
+	"errors"
 	"os"
 	"strings"
 
 	"github.com/ChargePi/chargeflow/pkg/report"
 )
 
-// csvStrategy implements OutputStrategy for CSV output.
-type csvStrategy struct{}
+var headers = []string{"message_id", "type", "errors"}
 
-func (csvStrategy) Write(path string, r *report.Report) error {
+// csvWriter implements ReportWriter for CSV output.
+type csvWriter struct{}
+
+func (csvWriter) Write(path string, r *report.Report) error {
+	if r == nil {
+		return errors.New("report is nil")
+	}
+
 	f, err := os.Create(path)
 	if err != nil {
 		return err
@@ -22,7 +29,7 @@ func (csvStrategy) Write(path string, r *report.Report) error {
 	defer w.Flush()
 
 	// Header
-	if err = w.Write([]string{"message_id", "type", "errors"}); err != nil {
+	if err = w.Write(headers); err != nil {
 		return err
 	}
 
