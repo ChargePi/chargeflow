@@ -5,17 +5,24 @@ with various Charge Point Management Systems or Charge Point implementations.
 
 ## Features
 
-- [x] Parse Raw OCPP JSON messages
-- [x] Support for OCPP 1.6, 2.0.1 and 2.1
-- [x] Request and Response payload validation
-- [x] Validate messages from a file
+- [x] Validate Raw OCPP JSON messages against multiple OCPP schemas
 - [x] Generate human-readable reports
+- [x] Support for remote schema registries using Kafka-compatible Schemas Registry APIs
+- [x] Bring your own OCPP schemas for vendor-specific extensions
+
+## Compatibility matrix
+
+|          OCPP specification | Supported |   
+|----------------------------:|:---------:|
+|                    OCPP 1.6 |     ✅     |
+| OCPP 1.6 Security Extension |     ✅     |
+|                  OCPP 2.0.1 |     ✅     |
+|                    OCPP 2.1 |     ✅     |
 
 ### Roadmap
 
 - [ ] Support for signed messages
 - [ ] Compatibility checks
-- [ ] Remote schema registry for vendors and models
 
 ## Installation
 
@@ -36,25 +43,19 @@ chargeflow validate '[2, "123456", "BootNotification", {"chargePointVendor": "Te
 For more options, you can run:
 
 ```bash
-chargeflow validate
-
-Validate the OCPP message(s) against the registered OCPP schema(s).
-
 Usage:
-  chargeflow validate [flags]
+  chargeflow [flags]
+  chargeflow [command]
 
-Examples:
-chargeflow --version 1.6 validate '[2, "123456", "BootNotification", {"chargePointVendor": "TestVendor", "chargePointModel": "TestModel"}]'
+Available Commands:
+  completion  Generate the autocompletion script for the specified shell
+  help        Help about any command
+  schema      Manage schemas on a remote schema registry
+  validate    Validate the OCPP message(s) against the registered OCPP schemas
 
 Flags:
-  -f, --file string            Path to a file containing the OCPP message to validate. If this flag is set, the message will be read from the file instead of the command line argument.
-  -h, --help                   help for validate
-  -o, --output string          Path to write validation report. Supports .json, .csv and .txt extensions.
-  -r, --response-type string   Response type to validate against (e.g. 'BootNotificationResponse'). Currently needed if you want to validate a single response message. 
-  -a, --schemas string         Path to additional OCPP schemas folder
-
-Global Flags:
   -d, --debug            Enable debug mode
+  -h, --help             help for chargeflow
   -v, --version string   OCPP version to use (1.6, 2.0.1 or 2.1) (default "1.6")
 ```
 
@@ -68,8 +69,8 @@ version!
 Additionally, you can specify a custom path to vendor-specific OCPP schemas using the `--schemas` flag.
 
 > [!TIP]
-> You can also validate multiple messages (both request and responses) from a file using the `-f` flag.
-
+> You can also validate multiple OCPP messages from a file using the `-f` flag.
+> The file should be a newline-separated list of JSON strings.
 
 ## License
 
