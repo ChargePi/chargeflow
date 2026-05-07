@@ -6,8 +6,6 @@ import (
 	"time"
 
 	"github.com/kaptinlin/jsonschema"
-
-	"github.com/ChargePi/chargeflow/pkg/ocpp"
 )
 
 type cachedSchema struct {
@@ -15,30 +13,25 @@ type cachedSchema struct {
 	cachedAt time.Time
 }
 
-// MemoryCache is a thread-safe in-memory Cache with TTL-based expiry.
+// MemoryCache is a thread-safe in-memory Cache with TTL-based expiry, keyed by subject name.
 type MemoryCache struct {
 	mu      sync.RWMutex
-	entries map[ocpp.Version]map[string]*cachedSchema
+	entries map[string]*cachedSchema
 	ttl     time.Duration
 }
 
 func NewMemoryCache(ttl time.Duration) *MemoryCache {
 	return &MemoryCache{
-		entries: make(map[ocpp.Version]map[string]*cachedSchema),
+		entries: make(map[string]*cachedSchema),
 		ttl:     ttl,
 	}
 }
 
-func (m *MemoryCache) Get(_ context.Context, version ocpp.Version, action string) (*jsonschema.Schema, bool) {
+func (m *MemoryCache) Get(_ context.Context, subject string) (*jsonschema.Schema, bool) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	actions, ok := m.entries[version]
-	if !ok {
-		return nil, false
-	}
-
-	entry, ok := actions[action]
+	entry, ok := m.entries[subject]
 	if !ok {
 		return nil, false
 	}
@@ -50,25 +43,19 @@ func (m *MemoryCache) Get(_ context.Context, version ocpp.Version, action string
 	return entry.schema, true
 }
 
-func (m *MemoryCache) Set(_ context.Context, version ocpp.Version, action string, schema *jsonschema.Schema) {
+func (m *MemoryCache) Set(_ context.Context, subject string, schema *jsonschema.Schema) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if _, ok := m.entries[version]; !ok {
-		m.entries[version] = make(map[string]*cachedSchema)
-	}
-
-	m.entries[version][action] = &cachedSchema{
+	m.entries[subject] = &cachedSchema{
 		schema:   schema,
 		cachedAt: time.Now(),
 	}
 }
 
-func (m *MemoryCache) Delete(_ context.Context, version ocpp.Version, action string) {
+func (m *MemoryCache) Delete(_ context.Context, subject string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	if actions, ok := m.entries[version]; ok {
-		delete(actions, action)
-	}
+	delete(m.entries, subject)
 }

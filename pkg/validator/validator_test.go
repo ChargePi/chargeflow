@@ -12,6 +12,7 @@ import (
 
 	mock_schema_registry "github.com/ChargePi/chargeflow/gen/mocks/pkg/schema_registry"
 	"github.com/ChargePi/chargeflow/pkg/ocpp"
+	"github.com/ChargePi/chargeflow/pkg/schema_registry"
 )
 
 var schema = []byte(`{
@@ -111,7 +112,7 @@ func (s *validatorTestSuite) TestValidateMessage_HappyPath() {
 	tests := []struct {
 		name          string
 		setupRegistry func(*mock_schema_registry.MockSchemaRegistry)
-		ocppVersion   ocpp.Version
+		ocppCtx       ocpp.OcppContext
 		message       ocpp.Message
 		expected      *ValidationResult
 	}{
@@ -120,10 +121,9 @@ func (s *validatorTestSuite) TestValidateMessage_HappyPath() {
 			setupRegistry: func(registry *mock_schema_registry.MockSchemaRegistry) {
 				schemaFromCompiler, err := s.compiler.Compile(schema)
 				s.Require().NoError(err)
-				registry.EXPECT().GetSchema(mock.Anything, ocpp.V20, "BootNotificationRequest").Return(schemaFromCompiler, true)
-				registry.EXPECT().Type().Return("file")
+				registry.EXPECT().GetSchema(mock.Anything, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V20}, Action: "BootNotificationRequest"}).Return(schemaFromCompiler, true)
 			},
-			ocppVersion: ocpp.V20,
+			ocppCtx: ocpp.OcppContext{Version: ocpp.V20},
 			message: &ocpp.Call{
 				MessageTypeId: ocpp.CALL,
 				UniqueId:      uuid.NewString(),
@@ -137,10 +137,9 @@ func (s *validatorTestSuite) TestValidateMessage_HappyPath() {
 			setupRegistry: func(registry *mock_schema_registry.MockSchemaRegistry) {
 				schemaFromCompiler, err := s.compiler.Compile(schema)
 				s.Require().NoError(err)
-				registry.EXPECT().GetSchema(mock.Anything, ocpp.V16, "BootNotificationRequest").Return(schemaFromCompiler, true)
-				registry.EXPECT().Type().Return("file")
+				registry.EXPECT().GetSchema(mock.Anything, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Action: "BootNotificationRequest"}).Return(schemaFromCompiler, true)
 			},
-			ocppVersion: ocpp.V16,
+			ocppCtx: ocpp.OcppContext{Version: ocpp.V16},
 			message: &ocpp.Call{
 				MessageTypeId: ocpp.CALL,
 				UniqueId:      uuid.NewString(),
@@ -154,10 +153,9 @@ func (s *validatorTestSuite) TestValidateMessage_HappyPath() {
 			setupRegistry: func(registry *mock_schema_registry.MockSchemaRegistry) {
 				schemaFromCompiler, err := s.compiler.Compile(responseSchema)
 				s.Require().NoError(err)
-				registry.EXPECT().Type().Return("file")
-				registry.EXPECT().GetSchema(mock.Anything, ocpp.V20, "BootNotificationResponse").Return(schemaFromCompiler, true)
+				registry.EXPECT().GetSchema(mock.Anything, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V20}, Action: "BootNotificationResponse"}).Return(schemaFromCompiler, true)
 			},
-			ocppVersion: ocpp.V20,
+			ocppCtx: ocpp.OcppContext{Version: ocpp.V20},
 			message: &ocpp.CallResult{
 				MessageTypeId: ocpp.CALL_RESULT,
 				UniqueId:      uuid.NewString(),
@@ -169,7 +167,7 @@ func (s *validatorTestSuite) TestValidateMessage_HappyPath() {
 		{
 			name:          "Valid OCPP 1.6 error",
 			setupRegistry: func(registry *mock_schema_registry.MockSchemaRegistry) {},
-			ocppVersion:   ocpp.V16,
+			ocppCtx:       ocpp.OcppContext{Version: ocpp.V16},
 			message: &ocpp.CallError{
 				MessageTypeId:    ocpp.CALL_ERROR,
 				UniqueId:         uuid.NewString(),
@@ -182,13 +180,61 @@ func (s *validatorTestSuite) TestValidateMessage_HappyPath() {
 		{
 			name:          "Valid OCPP 2.1 SEND request",
 			setupRegistry: func(registry *mock_schema_registry.MockSchemaRegistry) {},
-			ocppVersion:   ocpp.V21,
+			ocppCtx:       ocpp.OcppContext{Version: ocpp.V21},
 			message: &ocpp.CallError{
 				MessageTypeId:    ocpp.CALL_ERROR,
 				UniqueId:         uuid.NewString(),
 				ErrorCode:        ocpp.GenericError,
 				ErrorDescription: "An error occurred",
 				ErrorDetails:     nil,
+			},
+			expected: NewValidationResult(),
+		},
+		{
+			name: "Valid request with vendor and model",
+			setupRegistry: func(registry *mock_schema_registry.MockSchemaRegistry) {
+				schemaFromCompiler, err := s.compiler.Compile(schema)
+				s.Require().NoError(err)
+				registry.EXPECT().GetSchema(mock.Anything, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16, Vendor: "Acme", Model: "X1"}, Action: "BootNotificationRequest"}).Return(schemaFromCompiler, true)
+			},
+			ocppCtx: ocpp.OcppContext{Version: ocpp.V16, Vendor: "Acme", Model: "X1"},
+			message: &ocpp.Call{
+				MessageTypeId: ocpp.CALL,
+				UniqueId:      uuid.NewString(),
+				Action:        "BootNotification",
+				Payload:       []byte("{\"chargePointVendor\":\"Vendor\",\"chargePointModel\":\"Model\"}"),
+			},
+			expected: NewValidationResult(),
+		},
+		{
+			name: "Valid request with vendor only",
+			setupRegistry: func(registry *mock_schema_registry.MockSchemaRegistry) {
+				schemaFromCompiler, err := s.compiler.Compile(schema)
+				s.Require().NoError(err)
+				registry.EXPECT().GetSchema(mock.Anything, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16, Vendor: "Acme"}, Action: "BootNotificationRequest"}).Return(schemaFromCompiler, true)
+			},
+			ocppCtx: ocpp.OcppContext{Version: ocpp.V16, Vendor: "Acme"},
+			message: &ocpp.Call{
+				MessageTypeId: ocpp.CALL,
+				UniqueId:      uuid.NewString(),
+				Action:        "BootNotification",
+				Payload:       []byte("{\"chargePointVendor\":\"Vendor\",\"chargePointModel\":\"Model\"}"),
+			},
+			expected: NewValidationResult(),
+		},
+		{
+			name: "Valid request with model only",
+			setupRegistry: func(registry *mock_schema_registry.MockSchemaRegistry) {
+				schemaFromCompiler, err := s.compiler.Compile(schema)
+				s.Require().NoError(err)
+				registry.EXPECT().GetSchema(mock.Anything, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16, Model: "X1"}, Action: "BootNotificationRequest"}).Return(schemaFromCompiler, true)
+			},
+			ocppCtx: ocpp.OcppContext{Version: ocpp.V16, Model: "X1"},
+			message: &ocpp.Call{
+				MessageTypeId: ocpp.CALL,
+				UniqueId:      uuid.NewString(),
+				Action:        "BootNotification",
+				Payload:       []byte("{\"chargePointVendor\":\"Vendor\",\"chargePointModel\":\"Model\"}"),
 			},
 			expected: NewValidationResult(),
 		},
@@ -203,7 +249,7 @@ func (s *validatorTestSuite) TestValidateMessage_HappyPath() {
 
 			validator := NewValidator(s.logger, registry)
 
-			result, err := validator.ValidateMessage(tt.ocppVersion, tt.message)
+			result, err := validator.ValidateMessage(tt.ocppCtx, tt.message)
 			s.NoError(err)
 			s.Emptyf(result.Errors(), "expected no validation errors but got %v", result.Errors())
 		})
@@ -214,7 +260,7 @@ func (s *validatorTestSuite) TestValidateMessage_UnhappyPath() {
 	tests := []struct {
 		name          string
 		setupRegistry func(*mock_schema_registry.MockSchemaRegistry)
-		ocppVersion   ocpp.Version
+		ocppCtx       ocpp.OcppContext
 		message       ocpp.Message
 		expected      *ValidationResult
 		expectedErr   error
@@ -224,10 +270,9 @@ func (s *validatorTestSuite) TestValidateMessage_UnhappyPath() {
 			setupRegistry: func(registry *mock_schema_registry.MockSchemaRegistry) {
 				schemaFromCompiler, err := s.compiler.Compile(schema)
 				s.Require().NoError(err)
-				registry.EXPECT().GetSchema(mock.Anything, ocpp.V16, "BootNotificationRequest").Return(schemaFromCompiler, true)
-				registry.EXPECT().Type().Return("file")
+				registry.EXPECT().GetSchema(mock.Anything, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Action: "BootNotificationRequest"}).Return(schemaFromCompiler, true)
 			},
-			ocppVersion: ocpp.V16,
+			ocppCtx: ocpp.OcppContext{Version: ocpp.V16},
 			message: &ocpp.Call{
 				MessageTypeId: ocpp.CALL,
 				UniqueId:      "",
@@ -243,7 +288,7 @@ func (s *validatorTestSuite) TestValidateMessage_UnhappyPath() {
 		{
 			name:          "Invalid request - missing payload",
 			setupRegistry: func(registry *mock_schema_registry.MockSchemaRegistry) {},
-			ocppVersion:   ocpp.V16,
+			ocppCtx:       ocpp.OcppContext{Version: ocpp.V16},
 			message: &ocpp.Call{
 				MessageTypeId: ocpp.CALL,
 				UniqueId:      uuid.NewString(),
@@ -259,7 +304,7 @@ func (s *validatorTestSuite) TestValidateMessage_UnhappyPath() {
 		{
 			name:          "Invalid response - missing payload",
 			setupRegistry: func(registry *mock_schema_registry.MockSchemaRegistry) {},
-			ocppVersion:   ocpp.V16,
+			ocppCtx:       ocpp.OcppContext{Version: ocpp.V16},
 			message: &ocpp.CallResult{
 				MessageTypeId: ocpp.CALL_RESULT,
 				UniqueId:      uuid.NewString(),
@@ -272,8 +317,8 @@ func (s *validatorTestSuite) TestValidateMessage_UnhappyPath() {
 			expectedErr: nil,
 		},
 		{
-			name:        "Invalid error - invalid error code",
-			ocppVersion: ocpp.V16,
+			name:    "Invalid error - invalid error code",
+			ocppCtx: ocpp.OcppContext{Version: ocpp.V16},
 			message: &ocpp.CallError{
 				MessageTypeId:    ocpp.CALL_ERROR,
 				UniqueId:         uuid.NewString(),
@@ -287,8 +332,8 @@ func (s *validatorTestSuite) TestValidateMessage_UnhappyPath() {
 			expectedErr: nil,
 		},
 		{
-			name:        "Invalid error - cannot cast to CallError",
-			ocppVersion: ocpp.V16,
+			name:    "Invalid error - cannot cast to CallError",
+			ocppCtx: ocpp.OcppContext{Version: ocpp.V16},
 			message: &ocpp.Call{
 				MessageTypeId: ocpp.CALL_ERROR,
 				UniqueId:      uuid.NewString(),
@@ -301,7 +346,7 @@ func (s *validatorTestSuite) TestValidateMessage_UnhappyPath() {
 		{
 			name:          "Multiple errors in message - invalid payload, missing uniqueId, malformed payload",
 			setupRegistry: func(registry *mock_schema_registry.MockSchemaRegistry) {},
-			ocppVersion:   ocpp.V16,
+			ocppCtx:       ocpp.OcppContext{Version: ocpp.V16},
 			message: &ocpp.Call{
 				MessageTypeId: ocpp.CALL,
 				UniqueId:      "",
@@ -317,10 +362,9 @@ func (s *validatorTestSuite) TestValidateMessage_UnhappyPath() {
 		{
 			name: "No registered schema for request",
 			setupRegistry: func(registry *mock_schema_registry.MockSchemaRegistry) {
-				registry.EXPECT().GetSchema(mock.Anything, ocpp.V16, "BootNotificationRequest").Return(nil, false)
-				registry.EXPECT().Type().Return("file")
+				registry.EXPECT().GetSchema(mock.Anything, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Action: "BootNotificationRequest"}).Return(nil, false)
 			},
-			ocppVersion: ocpp.V16,
+			ocppCtx: ocpp.OcppContext{Version: ocpp.V16},
 			message: &ocpp.Call{
 				MessageTypeId: ocpp.CALL,
 				UniqueId:      uuid.NewString(),
@@ -338,10 +382,9 @@ func (s *validatorTestSuite) TestValidateMessage_UnhappyPath() {
 			setupRegistry: func(registry *mock_schema_registry.MockSchemaRegistry) {
 				schemaFromCompiler, err := s.compiler.Compile(schema)
 				s.Require().NoError(err)
-				registry.EXPECT().Type().Return("file")
-				registry.EXPECT().GetSchema(mock.Anything, ocpp.V16, "BootNotificationRequest").Return(schemaFromCompiler, true)
+				registry.EXPECT().GetSchema(mock.Anything, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Action: "BootNotificationRequest"}).Return(schemaFromCompiler, true)
 			},
-			ocppVersion: ocpp.V16,
+			ocppCtx: ocpp.OcppContext{Version: ocpp.V16},
 			message: &ocpp.Call{
 				MessageTypeId: ocpp.CALL,
 				UniqueId:      uuid.NewString(),
@@ -358,7 +401,7 @@ func (s *validatorTestSuite) TestValidateMessage_UnhappyPath() {
 			name: "Unsupported message (SEND) for ocpp version",
 			setupRegistry: func(registry *mock_schema_registry.MockSchemaRegistry) {
 			},
-			ocppVersion: ocpp.V16,
+			ocppCtx: ocpp.OcppContext{Version: ocpp.V16},
 			message: &ocpp.Send{
 				MessageTypeId: ocpp.SEND,
 				UniqueId:      uuid.NewString(),
@@ -375,7 +418,7 @@ func (s *validatorTestSuite) TestValidateMessage_UnhappyPath() {
 			name: "Unsupported message (CALL_RESULT_ERROR) for ocpp version",
 			setupRegistry: func(registry *mock_schema_registry.MockSchemaRegistry) {
 			},
-			ocppVersion: ocpp.V16,
+			ocppCtx: ocpp.OcppContext{Version: ocpp.V16},
 			message: &ocpp.CallResultError{
 				MessageTypeId:    ocpp.CALL_RESULT_ERROR,
 				UniqueId:         uuid.NewString(),
@@ -388,6 +431,24 @@ func (s *validatorTestSuite) TestValidateMessage_UnhappyPath() {
 			},
 			expectedErr: nil,
 		},
+		{
+			name: "No registered schema for vendor and model specific request",
+			setupRegistry: func(registry *mock_schema_registry.MockSchemaRegistry) {
+				registry.EXPECT().GetSchema(mock.Anything, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16, Vendor: "Acme", Model: "X1"}, Action: "BootNotificationRequest"}).Return(nil, false)
+			},
+			ocppCtx: ocpp.OcppContext{Version: ocpp.V16, Vendor: "Acme", Model: "X1"},
+			message: &ocpp.Call{
+				MessageTypeId: ocpp.CALL,
+				UniqueId:      uuid.NewString(),
+				Action:        "BootNotification",
+				Payload:       "{\"chargePointVendor\":\"Vendor\",\"chargePointModel\":\"Model\"}",
+			},
+			expected: &ValidationResult{
+				isValid: false,
+				errors:  []string{},
+			},
+			expectedErr: errors.New("no schema found for action BootNotificationRequest in OCPP version 1.6"),
+		},
 	}
 
 	for _, test := range tests {
@@ -399,7 +460,7 @@ func (s *validatorTestSuite) TestValidateMessage_UnhappyPath() {
 
 			validator := NewValidator(s.logger, registry)
 
-			result, err := validator.ValidateMessage(test.ocppVersion, test.message)
+			result, err := validator.ValidateMessage(test.ocppCtx, test.message)
 			if test.expectedErr != nil {
 				s.ErrorContains(err, test.expectedErr.Error())
 			} else {

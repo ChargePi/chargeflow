@@ -81,8 +81,7 @@ func Test_registerAdditionalSchemas(t *testing.T) {
 
 			// Call the function to register additional schemas
 			ctx := context.Background()
-			version := ocpp.Version(test.defaultOcppVersion)
-			err = registerSchemasFromDir(ctx, logger, registry, version, tempDir)
+			err = registerSchemasFromDir(ctx, logger, registry, ocpp.OcppContext{Version: ocpp.Version(test.defaultOcppVersion)}, tempDir)
 			if test.expected != nil {
 				// The shared function returns aggregated errors, so we check that an error occurred
 				assert.Error(t, err)

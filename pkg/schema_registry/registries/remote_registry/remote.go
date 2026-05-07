@@ -18,9 +18,9 @@ import (
 	"github.com/pkg/errors"
 	"go.uber.org/zap"
 
-	"github.com/ChargePi/chargeflow/pkg/schema_registry/registries/file_registry"
-
 	"github.com/ChargePi/chargeflow/pkg/ocpp"
+	"github.com/ChargePi/chargeflow/pkg/schema_registry"
+	"github.com/ChargePi/chargeflow/pkg/schema_registry/registries/file_registry"
 )
 
 type remoteRegistryConfig struct {
@@ -142,12 +142,25 @@ func NewRemoteSchemaRegistry(baseURL string, logger *zap.Logger, opts ...Options
 	return registry, nil
 }
 
-// buildSubjectName constructs a subject name from OCPP version and action.
-// Format: ocpp-{version}-{action}
-// Example: ocpp-1.6-BootNotificationRequest
-func buildSubjectName(ocppVersion ocpp.Version, action string) string {
+// buildSubjectName constructs a subject name from OCPP version, action, and optional vendor/model.
+// Base format:  ocpp-{version}-{action}
+// With vendor/model: {vendor}-{model}-ocpp-{version}-{action}
+// Omitted parts are skipped when empty.
+func buildSubjectName(ocppVersion ocpp.Version, action, vendor, model string) string {
 	versionStr := strings.ReplaceAll(ocppVersion.String(), ".", "-")
-	return fmt.Sprintf("ocpp-%s-%s", versionStr, action)
+	base := fmt.Sprintf("ocpp-%s-%s", versionStr, action)
+	if vendor == "" && model == "" {
+		return base
+	}
+	parts := make([]string, 0, 3)
+	if vendor != "" {
+		parts = append(parts, vendor)
+	}
+	if model != "" {
+		parts = append(parts, model)
+	}
+	parts = append(parts, base)
+	return strings.Join(parts, "-")
 }
 
 // getLatestVersion fetches the latest version number for a subject from the remote registry.
@@ -231,33 +244,33 @@ func (r *SchemaRegistry) fetchSchemaFromRemote(ctx context.Context, subject stri
 	}
 }
 
-type RegisterSchemaRequest struct {
+type registerSchemaPayload struct {
 	Schema     string `json:"schema"`
 	SchemaType string `json:"schemaType"`
 }
 
-func (r *SchemaRegistry) RegisterSchema(ctx context.Context, ocppVersion ocpp.Version, action string, rawSchema json.RawMessage) error {
-	logger := r.logger.With(zap.String("ocppVersion", ocppVersion.String()), zap.String("action", action))
+func (r *SchemaRegistry) RegisterSchema(ctx context.Context, req schema_registry.CreateSchemaRequest) error {
+	logger := r.logger.With(zap.String("ocppVersion", req.OcppContext.Version.String()), zap.String("action", req.Action))
 	logger.Debug("Registering schema to remote registry")
 
 	// Validate the OCPP version
-	if !ocpp.IsValidProtocolVersion(ocppVersion) {
-		return errors.Errorf("invalid OCPP version: %s", ocppVersion)
+	if !ocpp.IsValidProtocolVersion(req.OcppContext.Version) {
+		return errors.Errorf("invalid OCPP version: %s", req.OcppContext.Version)
 	}
 
 	// Must be a valid action name ending with "Request" or "Response"
-	if !(strings.HasSuffix(action, "Request") || strings.HasSuffix(action, "Response")) {
-		return errors.Errorf("action must end with 'Request' or 'Response': %s", action)
+	if !(strings.HasSuffix(req.Action, "Request") || strings.HasSuffix(req.Action, "Response")) {
+		return errors.Errorf("action must end with 'Request' or 'Response': %s", req.Action)
 	}
 
-	subject := buildSubjectName(ocppVersion, action)
+	subject := buildSubjectName(req.OcppContext.Version, req.Action, req.OcppContext.Vendor, req.OcppContext.Model)
 
 	ctx, cancel := context.WithTimeout(ctx, r.config.timeout)
 	defer cancel()
 
 	// Validate and normalize the schema before sending
 	// First, try to compile it to ensure it's valid JSON Schema
-	_, err := r.compiler.Compile(rawSchema)
+	_, err := r.compiler.Compile(req.Schema)
 	if err != nil {
 		return errors.Wrapf(err, "invalid JSON schema format for subject %s", subject)
 	}
@@ -265,7 +278,7 @@ func (r *SchemaRegistry) RegisterSchema(ctx context.Context, ocppVersion ocpp.Ve
 	// Clear any formatting by unmarshaling and re-marshaling as compact JSON
 	// This ensures the schema is normalized without any whitespace/formatting or escaping issues
 	var schemaObj interface{}
-	if err := json.Unmarshal(rawSchema, &schemaObj); err != nil {
+	if err := json.Unmarshal(req.Schema, &schemaObj); err != nil {
 		return errors.Wrapf(err, "failed to parse schema JSON for subject %s", subject)
 	}
 
@@ -276,16 +289,10 @@ func (r *SchemaRegistry) RegisterSchema(ctx context.Context, ocppVersion ocpp.Ve
 		return errors.Wrapf(err, "failed to normalize schema JSON for subject %s", subject)
 	}
 
-	// The schema must be sent as a JSON string
-	// Convert normalized bytes to string - this is raw JSON without any escaping
-	// json.Marshal will properly escape this string when serializing the request body
-
 	logger.Debug("Schema string prepared for registration", zap.String("subject", subject))
 
-	// Create the request payload
-	schemaStr := string(normalizedBytes)
-	payload := RegisterSchemaRequest{
-		Schema:     schemaStr,
+	payload := registerSchemaPayload{
+		Schema:     string(normalizedBytes),
 		SchemaType: "JSON",
 	}
 
@@ -329,25 +336,25 @@ func (r *SchemaRegistry) RegisterSchema(ctx context.Context, ocppVersion ocpp.Ve
 	}
 
 	// Invalidate cache for this schema
-	r.cache.Delete(ctx, ocppVersion, action)
+	r.cache.Delete(ctx, subject)
 
 	logger.Debug("Successfully registered schema to remote registry")
 	return nil
 }
 
-func (r *SchemaRegistry) DeleteSchema(ctx context.Context, ocppVersion ocpp.Version, action string) error {
-	logger := r.logger.With(zap.String("ocppVersion", ocppVersion.String()), zap.String("action", action))
+func (r *SchemaRegistry) DeleteSchema(ctx context.Context, req schema_registry.DeleteSchemaRequest) error {
+	logger := r.logger.With(zap.String("ocppVersion", req.OcppContext.Version.String()), zap.String("action", req.Action))
 	logger.Debug("Deleting schema from remote registry")
 
-	if !ocpp.IsValidProtocolVersion(ocppVersion) {
-		return errors.Errorf("invalid OCPP version: %s", ocppVersion)
+	if !ocpp.IsValidProtocolVersion(req.OcppContext.Version) {
+		return errors.Errorf("invalid OCPP version: %s", req.OcppContext.Version)
 	}
 
-	if !(strings.HasSuffix(action, file_registry.RequestSuffix) || strings.HasSuffix(action, file_registry.ResponseSuffix)) {
-		return errors.Errorf("action must end with 'Request' or 'Response': %s", action)
+	if !(strings.HasSuffix(req.Action, file_registry.RequestSuffix) || strings.HasSuffix(req.Action, file_registry.ResponseSuffix)) {
+		return errors.Errorf("action must end with 'Request' or 'Response': %s", req.Action)
 	}
 
-	subject := buildSubjectName(ocppVersion, action)
+	subject := buildSubjectName(req.OcppContext.Version, req.Action, req.OcppContext.Vendor, req.OcppContext.Model)
 
 	ctx, cancel := context.WithTimeout(ctx, r.config.timeout)
 	defer cancel()
@@ -383,65 +390,84 @@ func (r *SchemaRegistry) DeleteSchema(ctx context.Context, ocppVersion ocpp.Vers
 		return errors.Errorf("unexpected status code %d when deleting schema for subject %s", resp.StatusCode, subject)
 	}
 
-	r.cache.Delete(ctx, ocppVersion, action)
+	r.cache.Delete(ctx, subject)
 
 	logger.Debug("Successfully deleted schema from remote registry")
 	return nil
 }
 
-func (r *SchemaRegistry) GetSchema(ctx context.Context, ocppVersion ocpp.Version, action string) (*jsonschema.Schema, bool) {
-	logger := r.logger.With(zap.String("ocppVersion", ocppVersion.String()), zap.String("action", action))
+// fetchAndCacheSchema fetches a schema for the given subject from the remote registry,
+// compiles it, caches it, and returns it. Returns nil, false if anything fails.
+func (r *SchemaRegistry) fetchAndCacheSchema(ctx context.Context, subject string) (*jsonschema.Schema, bool) {
+	latestVersion, err := r.getLatestVersion(ctx, subject)
+	if err != nil {
+		r.logger.Warn("Failed to get latest version", zap.String("subject", subject), zap.Error(err))
+		return nil, false
+	}
+
+	rawSchema, err := r.fetchSchemaFromRemote(ctx, subject, latestVersion)
+	if err != nil {
+		r.logger.Warn("Failed to fetch schema from remote", zap.String("subject", subject), zap.Error(err))
+		return nil, false
+	}
+
+	schema, err := r.compiler.Compile(rawSchema)
+	if err != nil {
+		r.logger.Warn("Failed to compile schema", zap.String("subject", subject), zap.Error(err))
+		return nil, false
+	}
+
+	r.cache.Set(ctx, subject, schema)
+	return schema, true
+}
+
+func (r *SchemaRegistry) GetSchema(ctx context.Context, req schema_registry.GetSchemaRequest) (*jsonschema.Schema, bool) {
+	logger := r.logger.With(
+		zap.String("ocppVersion", req.OcppContext.Version.String()),
+		zap.String("action", req.Action),
+		zap.String("vendor", req.OcppContext.Vendor),
+		zap.String("model", req.OcppContext.Model),
+	)
 	logger.Debug("Getting schema")
 
-	// Validate the OCPP version
-	if !ocpp.IsValidProtocolVersion(ocppVersion) {
+	if !ocpp.IsValidProtocolVersion(req.OcppContext.Version) {
 		logger.Warn("Invalid OCPP version")
 		return nil, false
 	}
 
-	// Must be a valid action name ending with "Request" or "Response"
-	if !(strings.HasSuffix(action, "Request") || strings.HasSuffix(action, "Response")) {
+	if !(strings.HasSuffix(req.Action, "Request") || strings.HasSuffix(req.Action, "Response")) {
 		logger.Warn("Invalid action name")
 		return nil, false
 	}
 
-	// Check cache first
-	if schema, ok := r.cache.Get(ctx, ocppVersion, action); ok {
-		logger.Debug("Returning schema from cache")
-		return schema, true
-	}
-
-	// Cache miss or expired - fetch from remote
-	subject := buildSubjectName(ocppVersion, action)
 	ctx, cancel := context.WithTimeout(ctx, r.config.timeout)
 	defer cancel()
 
-	// Get the latest version
-	latestVersion, err := r.getLatestVersion(ctx, subject)
-	if err != nil {
-		logger.Warn("Failed to get latest version", zap.Error(err))
-		return nil, false
+	// When vendor or model is provided, try the specific subject first.
+	if req.OcppContext.Vendor != "" || req.OcppContext.Model != "" {
+		specificSubject := buildSubjectName(req.OcppContext.Version, req.Action, req.OcppContext.Vendor, req.OcppContext.Model)
+		if schema, ok := r.cache.Get(ctx, specificSubject); ok {
+			logger.Debug("Returning vendor/model-specific schema from cache")
+			return schema, true
+		}
+		if schema, ok := r.fetchAndCacheSchema(ctx, specificSubject); ok {
+			logger.Debug("Returning vendor/model-specific schema from remote")
+			return schema, true
+		}
+		logger.Debug("No vendor/model-specific schema found, falling back to base schema")
 	}
 
-	// Fetch the schema
-	rawSchema, err := r.fetchSchemaFromRemote(ctx, subject, latestVersion)
-	if err != nil {
-		logger.Warn("Failed to fetch schema from remote", zap.Error(err))
-		return nil, false
+	baseSubject := buildSubjectName(req.OcppContext.Version, req.Action, "", "")
+	if schema, ok := r.cache.Get(ctx, baseSubject); ok {
+		logger.Debug("Returning base schema from cache")
+		return schema, true
 	}
 
-	// Compile the schema
-	schema, err := r.compiler.Compile(rawSchema)
-	if err != nil {
-		logger.Warn("Failed to compile schema", zap.Error(err))
-		return nil, false
+	schema, ok := r.fetchAndCacheSchema(ctx, baseSubject)
+	if ok {
+		logger.Debug("Successfully fetched and cached base schema from remote")
 	}
-
-	// Update cache
-	r.cache.Set(ctx, ocppVersion, action, schema)
-
-	logger.Debug("Successfully fetched and cached schema from remote")
-	return schema, true
+	return schema, ok
 }
 
 func (r *SchemaRegistry) Type() string {

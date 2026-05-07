@@ -14,6 +14,7 @@ import (
 
 	mock_schema_registry "github.com/ChargePi/chargeflow/gen/mocks/pkg/schema_registry"
 	"github.com/ChargePi/chargeflow/pkg/ocpp"
+	"github.com/ChargePi/chargeflow/pkg/schema_registry"
 )
 
 var (
@@ -250,70 +251,77 @@ func (s *validationServiceTestSuite) TearDownSuite() {
 	_ = os.RemoveAll(dir)
 }
 
-func (s *validationServiceTestSuite) TestValidateFile() {
+func (s *validationServiceTestSuite) TestValidate_File() {
 	tests := []struct {
 		name            string
-		filepath        string
-		version         ocpp.Version
+		req             Request
 		setExpectations func(*mock_schema_registry.MockSchemaRegistry)
 		expectedErr     error
 	}{
 		{
-			name:     "Valid file with version 1.6",
-			filepath: s.files["ocpp16_all_valid"].path,
-			version:  ocpp.V16,
+			name: "Valid file with version 1.6",
+			req:  Request{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, File: s.files["ocpp16_all_valid"].path},
 			setExpectations: func(registry *mock_schema_registry.MockSchemaRegistry) {
 				compile, err := jsonschema.NewCompiler().Compile(bootNotificationSchema)
 				s.Require().NoError(err)
-
-				registry.EXPECT().Type().Return("file")
-				registry.EXPECT().GetSchema(mock.Anything, ocpp.V16, "BootNotificationRequest").Return(compile, true)
+				registry.EXPECT().GetSchema(mock.Anything, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Action: "BootNotificationRequest"}).Return(compile, true)
 
 				compile, err = jsonschema.NewCompiler().Compile(bootNotificationResponseSchema)
 				s.Require().NoError(err)
-				registry.EXPECT().GetSchema(mock.Anything, ocpp.V16, "BootNotificationResponse").Return(compile, true)
+				registry.EXPECT().GetSchema(mock.Anything, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Action: "BootNotificationResponse"}).Return(compile, true)
 			},
 			expectedErr: nil,
 		},
 		{
-			name:     "Valid file with version 2.0",
-			filepath: s.files["ocpp201_all_valid"].path,
-			version:  ocpp.V20,
+			name: "Valid file with version 2.0",
+			req:  Request{OcppContext: ocpp.OcppContext{Version: ocpp.V20}, File: s.files["ocpp201_all_valid"].path},
 			setExpectations: func(registry *mock_schema_registry.MockSchemaRegistry) {
 				compile, err := jsonschema.NewCompiler().Compile(costUpdatedSchema)
 				s.Require().NoError(err)
-
-				registry.EXPECT().Type().Return("file")
-				registry.EXPECT().GetSchema(mock.Anything, ocpp.V20, "CostUpdatedRequest").Return(compile, true)
+				registry.EXPECT().GetSchema(mock.Anything, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V20}, Action: "CostUpdatedRequest"}).Return(compile, true)
 
 				compile, err = jsonschema.NewCompiler().Compile(costUpdatedResponseSchema)
 				s.Require().NoError(err)
-				registry.EXPECT().GetSchema(mock.Anything, ocpp.V20, "CostUpdatedResponse").Return(compile, true)
+				registry.EXPECT().GetSchema(mock.Anything, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V20}, Action: "CostUpdatedResponse"}).Return(compile, true)
 			},
 			expectedErr: nil,
 		},
 		{
-			name:     "Invalid version",
-			filepath: s.files["ocpp201_all_valid"].path,
-			version:  "ocpp.V99",
+			name: "Invalid version",
+			req:  Request{OcppContext: ocpp.OcppContext{Version: "ocpp.V99"}, File: s.files["ocpp201_all_valid"].path},
 			setExpectations: func(registry *mock_schema_registry.MockSchemaRegistry) {
-				registry.EXPECT().Type().Return("file")
-				registry.EXPECT().GetSchema(mock.Anything, ocpp.Version("ocpp.V99"), mock.Anything).Return(nil, false)
+				registry.EXPECT().GetSchema(mock.Anything, mock.MatchedBy(func(r schema_registry.GetSchemaRequest) bool {
+					return r.OcppContext.Version == ocpp.Version("ocpp.V99")
+				})).Return(nil, false)
 			},
 			expectedErr: errors.New("no schema found for action CostUpdatedRequest in OCPP version ocpp.V99"),
 		},
 		{
 			name:            "Non-existent file",
-			filepath:        "./examples/non_existent_file.txt",
-			version:         ocpp.V16,
+			req:             Request{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, File: "./examples/non_existent_file.txt"},
 			setExpectations: func(registry *mock_schema_registry.MockSchemaRegistry) {},
 			expectedErr:     errors.New("failed to open file"),
 		},
 		{
-			name:     "Invalid messages",
-			filepath: s.files["empty_file"].path,
-			version:  ocpp.V16,
+			name:            "Empty file",
+			req:             Request{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, File: s.files["empty_file"].path},
+			setExpectations: func(registry *mock_schema_registry.MockSchemaRegistry) {},
+			expectedErr:     nil,
+		},
+		{
+			name: "Vendor/model-specific validation falls back to base schema",
+			req: Request{
+				OcppContext: ocpp.OcppContext{Version: ocpp.V16, Vendor: "Acme", Model: "X1"},
+				File:        s.files["ocpp16_all_valid"].path,
+			},
 			setExpectations: func(registry *mock_schema_registry.MockSchemaRegistry) {
+				compile, err := jsonschema.NewCompiler().Compile(bootNotificationSchema)
+				s.Require().NoError(err)
+				registry.EXPECT().GetSchema(mock.Anything, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16, Vendor: "Acme", Model: "X1"}, Action: "BootNotificationRequest"}).Return(compile, true)
+
+				compile, err = jsonschema.NewCompiler().Compile(bootNotificationResponseSchema)
+				s.Require().NoError(err)
+				registry.EXPECT().GetSchema(mock.Anything, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16, Vendor: "Acme", Model: "X1"}, Action: "BootNotificationResponse"}).Return(compile, true)
 			},
 			expectedErr: nil,
 		},
@@ -327,7 +335,7 @@ func (s *validationServiceTestSuite) TestValidateFile() {
 			}
 
 			service := NewService(s.logger, registry)
-			err := service.ValidateFile(tt.filepath, tt.version)
+			_, err := service.Validate(tt.req)
 			if tt.expectedErr != nil {
 				s.ErrorContains(err, tt.expectedErr.Error())
 			} else {
@@ -337,58 +345,48 @@ func (s *validationServiceTestSuite) TestValidateFile() {
 	}
 }
 
-func (s *validationServiceTestSuite) TestValidateMessage() {
+func (s *validationServiceTestSuite) TestValidate_Message() {
 	tests := []struct {
 		name            string
-		message         string
-		version         ocpp.Version
+		req             Request
 		setExpectations func(*mock_schema_registry.MockSchemaRegistry)
 		expectedErr     error
 	}{
 		{
-			name:    "Valid message with version 1.6",
-			message: ocpp16validReq,
-			version: ocpp.V16,
+			name: "Valid message with version 1.6",
+			req:  Request{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Messages: []string{ocpp16validReq}},
 			setExpectations: func(registry *mock_schema_registry.MockSchemaRegistry) {
 				compile, err := jsonschema.NewCompiler().Compile(bootNotificationSchema)
 				s.Require().NoError(err)
-				registry.EXPECT().Type().Return("file")
-				registry.EXPECT().GetSchema(mock.Anything, ocpp.V16, "BootNotificationRequest").Return(compile, true)
+				registry.EXPECT().GetSchema(mock.Anything, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Action: "BootNotificationRequest"}).Return(compile, true)
 			},
 			expectedErr: nil,
 		},
 		{
-			name:    "Valid message with version 2.0",
-			message: ocpp201validReq,
-			version: ocpp.V20,
+			name: "Valid message with version 2.0",
+			req:  Request{OcppContext: ocpp.OcppContext{Version: ocpp.V20}, Messages: []string{ocpp201validReq}},
 			setExpectations: func(registry *mock_schema_registry.MockSchemaRegistry) {
 				compile, err := jsonschema.NewCompiler().Compile(costUpdatedSchema)
 				s.Require().NoError(err)
-				registry.EXPECT().Type().Return("file")
-				registry.EXPECT().GetSchema(mock.Anything, ocpp.V20, "CostUpdatedRequest").Return(compile, true)
+				registry.EXPECT().GetSchema(mock.Anything, schema_registry.GetSchemaRequest{OcppContext: ocpp.OcppContext{Version: ocpp.V20}, Action: "CostUpdatedRequest"}).Return(compile, true)
 			},
 			expectedErr: nil,
 		},
 		{
-			name:    "Invalid message with version 1.6",
-			message: ocpp16invalidReq,
-			version: ocpp.V16,
-			setExpectations: func(registry *mock_schema_registry.MockSchemaRegistry) {
-				//registry.EXPECT().GetSchema(ocpp.V16, "InvalidRequest").Return(nil, false)
-			},
-			expectedErr: nil,
-		},
-		{
-			name:            "Unparsable message",
-			message:         "{invalid: json}",
-			version:         ocpp.V20,
+			name:            "Invalid message with version 1.6 (parse error)",
+			req:             Request{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Messages: []string{ocpp16invalidReq}},
 			setExpectations: func(registry *mock_schema_registry.MockSchemaRegistry) {},
 			expectedErr:     nil,
 		},
 		{
-			name:            "Invalid message",
-			message:         "[5, \"1234\", \"Invalid\", {\"errorCode\": \"GenericError\", \"errorDescription\": \"An error occurred\"}]",
-			version:         ocpp.V16,
+			name:            "Unparsable message",
+			req:             Request{OcppContext: ocpp.OcppContext{Version: ocpp.V20}, Messages: []string{"{invalid: json}"}},
+			setExpectations: func(registry *mock_schema_registry.MockSchemaRegistry) {},
+			expectedErr:     nil,
+		},
+		{
+			name:            "CALL_RESULT_ERROR for OCPP 1.6 (unsupported)",
+			req:             Request{OcppContext: ocpp.OcppContext{Version: ocpp.V16}, Messages: []string{`[5, "1234", "Invalid", {"errorCode": "GenericError", "errorDescription": "An error occurred"}]`}},
 			setExpectations: func(registry *mock_schema_registry.MockSchemaRegistry) {},
 			expectedErr:     nil,
 		},
@@ -401,10 +399,8 @@ func (s *validationServiceTestSuite) TestValidateMessage() {
 				tt.setExpectations(registry)
 			}
 
-			// todo capture messages from logger and check if they match the expected output
 			service := NewService(s.logger, registry)
-
-			err := service.ValidateMessage(tt.message, tt.version)
+			_, err := service.Validate(tt.req)
 			if tt.expectedErr != nil {
 				s.ErrorContains(err, tt.expectedErr.Error())
 			} else {
