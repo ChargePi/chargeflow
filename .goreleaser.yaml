@@ -37,7 +37,7 @@ dockers_v2:
 
 release:
   github:
-    owner: ${{ .Env.GITHUB_REPOSITORY_OWNER }}
+    owner: "{{ .Env.GITHUB_REPOSITORY_OWNER }}"
     name: chargeflow
 
 changelog:
