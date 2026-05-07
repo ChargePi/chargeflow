@@ -56,6 +56,8 @@ Available Commands:
 Flags:
   -d, --debug            Enable debug mode
   -h, --help             help for chargeflow
+  -m, --model string     Charging-station model for vendor/model-specific schema selection
+  -V, --vendor string    Charging-station vendor for vendor/model-specific schema selection
   -v, --version string   OCPP version to use (1.6, 2.0.1 or 2.1) (default "1.6")
 ```
 
@@ -71,6 +73,12 @@ Additionally, you can specify a custom path to vendor-specific OCPP schemas usin
 > [!TIP]
 > You can also validate multiple OCPP messages from a file using the `-f` flag.
 > The file should be a newline-separated list of JSON strings.
+
+For more detailed usage, see the documentation:
+
+- [Validating messages from a file](docs/validate-from-file.md)
+- [Custom and vendor-specific schemas](docs/custom-schemas.md)
+- [Remote schema registry](docs/remote-registry.md)
 
 ## License
 
