@@ -1,0 +1,12 @@
+FROM alpine:3.21
+
+ARG TARGETPLATFORM
+ARG user=app
+ARG group=docker
+RUN addgroup $group && adduser -D -G $group $user
+USER $user
+
+WORKDIR /usr/local/bin
+COPY --chown=$user:$group $TARGETPLATFORM/chargeflow /usr/local/bin/chargeflow
+
+CMD ["/usr/local/bin/chargeflow"]

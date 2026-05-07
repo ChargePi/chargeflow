@@ -30,7 +30,7 @@ dockers_v2:
     tags:
       - "{{ .Tag }}"
       - "latest"
-    dockerfile: ./build/Dockerfile
+    dockerfile: Dockerfile.release
     platforms:
       - linux/amd64
       - linux/arm64
@@ -45,4 +45,3 @@ changelog:
   filters:
     exclude:
       - '.*\.md$'
-
