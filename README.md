@@ -26,10 +26,32 @@ with various Charge Point Management Systems or Charge Point implementations.
 
 ## Installation
 
-You can install ChargeFlow by downloading the binary.
+### Binary
+
+Download the latest release for your platform from the [releases page](https://github.com/chargepi/chargeflow/releases/latest).
+
+**Linux / macOS**
 
 ```bash
+# Set your platform (linux or darwin) and architecture (amd64 or arm64)
+OS=linux
+ARCH=amd64
 
+VERSION=$(curl -s https://api.github.com/repos/chargepi/chargeflow/releases/latest | grep '"tag_name"' | cut -d'"' -f4)
+curl -L "https://github.com/chargepi/chargeflow/releases/download/${VERSION}/chargeflow_${VERSION#v}_${OS}_${ARCH}.tar.gz" | tar -xz chargeflow
+sudo mv chargeflow /usr/local/bin/
+```
+
+### Docker
+
+```bash
+docker pull ghcr.io/chargepi/chargeflow:latest
+```
+
+Run a command with Docker:
+
+```bash
+docker run --rm ghcr.io/chargepi/chargeflow:latest validate '[2, "123456", "BootNotification", {"chargePointVendor": "TestVendor", "chargePointModel": "TestModel"}]'
 ```
 
 ## Usage
