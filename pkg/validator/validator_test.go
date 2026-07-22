@@ -1,6 +1,8 @@
 package validator
 
 import (
+	"encoding/base64"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -96,6 +98,58 @@ var responseSchema = []byte(`{
         "interval"
     ]
 }`)
+
+// permissiveSchema accepts any object payload; used where the test cares about the
+// OCMF hook rather than full OCPP structural validation.
+var permissiveSchema = []byte(`{"type": "object"}`)
+
+const validOCMFRecord = `OCMF|{"FV":"1.0","PG":"T1","RD":[{"TM":"2018-07-24T13:22:04,000+0200 S","ST":"G"}]}|{"SD":"AA"}`
+
+// invalidOCMFRecord has an "RI" reading field without its required pair "RU".
+const invalidOCMFRecord = `OCMF|{"FV":"1.0","PG":"T1","RD":[{"TM":"2018-07-24T13:22:04,000+0200 S","ST":"G","RI":"1-b:1.8.0"}]}|{"SD":"AA"}`
+
+// meterValuesPayload16 builds an OCPP 1.6 MeterValues.req payload carrying value as the
+// raw sampledValue, as used for signed (e.g. OCMF) readings in that version.
+func meterValuesPayload16(value string) map[string]interface{} {
+	return map[string]interface{}{
+		"connectorId": float64(1),
+		"meterValue": []interface{}{
+			map[string]interface{}{
+				"timestamp": "2023-10-01T12:00:00Z",
+				"sampledValue": []interface{}{
+					map[string]interface{}{
+						"value":  value,
+						"format": "SignedData",
+					},
+				},
+			},
+		},
+	}
+}
+
+// meterValuesPayload20 builds an OCPP 2.0.1 MeterValues.req payload carrying value inside
+// a sampledValue.signedMeterValue sub-object, base64-encoding it as the OCPP spec requires.
+func meterValuesPayload20(encodingMethod, value string) map[string]interface{} {
+	return map[string]interface{}{
+		"evseId": float64(1),
+		"meterValue": []interface{}{
+			map[string]interface{}{
+				"timestamp": "2023-10-01T12:00:00Z",
+				"sampledValue": []interface{}{
+					map[string]interface{}{
+						"value": float64(0),
+						"signedMeterValue": map[string]interface{}{
+							"signedMeterData": base64.StdEncoding.EncodeToString([]byte(value)),
+							"signingMethod":   "",
+							"encodingMethod":  encodingMethod,
+							"publicKey":       "",
+						},
+					},
+				},
+			},
+		},
+	}
+}
 
 type validatorTestSuite struct {
 	suite.Suite
@@ -469,6 +523,118 @@ func (s *validatorTestSuite) TestValidateMessage_UnhappyPath() {
 					s.Contains(result.Errors(), e)
 				}
 			}
+		})
+	}
+}
+
+func (s *validatorTestSuite) TestValidateMessage_MeterValuesOCMF() {
+	tests := []struct {
+		name        string
+		ocppCtx     ocpp.OcppContext
+		action      string
+		payload     interface{}
+		expectOCMF  bool
+		wantErrText string
+	}{
+		{
+			name:       "OCPP 1.6 MeterValues with valid OCMF sampled value",
+			ocppCtx:    ocpp.OcppContext{Version: ocpp.V16},
+			action:     "MeterValues",
+			payload:    meterValuesPayload16(validOCMFRecord),
+			expectOCMF: false,
+		},
+		{
+			name:        "OCPP 1.6 MeterValues with invalid OCMF sampled value",
+			ocppCtx:     ocpp.OcppContext{Version: ocpp.V16},
+			action:      "MeterValues",
+			payload:     meterValuesPayload16(invalidOCMFRecord),
+			expectOCMF:  true,
+			wantErrText: "OCMF:",
+		},
+		{
+			name:       "OCPP 1.6 MeterValues with non-OCMF sampled value",
+			ocppCtx:    ocpp.OcppContext{Version: ocpp.V16},
+			action:     "MeterValues",
+			payload:    meterValuesPayload16("1234.5"),
+			expectOCMF: false,
+		},
+		{
+			name:       "OCPP 2.0 MeterValues with valid OCMF signedMeterValue",
+			ocppCtx:    ocpp.OcppContext{Version: ocpp.V20},
+			action:     "MeterValues",
+			payload:    meterValuesPayload20("OCMF", validOCMFRecord),
+			expectOCMF: false,
+		},
+		{
+			name:        "OCPP 2.0 MeterValues with invalid OCMF signedMeterValue",
+			ocppCtx:     ocpp.OcppContext{Version: ocpp.V20},
+			action:      "MeterValues",
+			payload:     meterValuesPayload20("OCMF", invalidOCMFRecord),
+			expectOCMF:  true,
+			wantErrText: "OCMF:",
+		},
+		{
+			name:       "OCPP 2.0 MeterValues with non-OCMF encodingMethod is not checked",
+			ocppCtx:    ocpp.OcppContext{Version: ocpp.V20},
+			action:     "MeterValues",
+			payload:    meterValuesPayload20("EDL", invalidOCMFRecord),
+			expectOCMF: false,
+		},
+		{
+			name:       "OCPP 1.6 MeterValues is not checked for OCPP 2.0's signedMeterValue shape",
+			ocppCtx:    ocpp.OcppContext{Version: ocpp.V16},
+			action:     "MeterValues",
+			payload:    meterValuesPayload20("OCMF", invalidOCMFRecord),
+			expectOCMF: false,
+		},
+		{
+			name:        "OCPP 2.0 TransactionEvent with invalid OCMF signedMeterValue",
+			ocppCtx:     ocpp.OcppContext{Version: ocpp.V20},
+			action:      "TransactionEvent",
+			payload:     meterValuesPayload20("OCMF", invalidOCMFRecord),
+			expectOCMF:  true,
+			wantErrText: "OCMF:",
+		},
+		{
+			name:       "OCPP 2.0 TransactionEvent without meterValue is not checked",
+			ocppCtx:    ocpp.OcppContext{Version: ocpp.V20},
+			action:     "TransactionEvent",
+			payload:    map[string]interface{}{"eventType": "Started"},
+			expectOCMF: false,
+		},
+	}
+
+	for _, tt := range tests {
+		s.Run(tt.name, func() {
+			registry := mock_schema_registry.NewMockSchemaRegistry(s.T())
+			schemaFromCompiler, err := s.compiler.Compile(permissiveSchema)
+			s.Require().NoError(err)
+			registry.EXPECT().GetSchema(mock.Anything, schema_registry.GetSchemaRequest{OcppContext: tt.ocppCtx, Action: tt.action + "Request"}).Return(schemaFromCompiler, true)
+
+			validator := NewValidator(s.logger, registry)
+
+			result, err := validator.ValidateMessage(tt.ocppCtx, &ocpp.Call{
+				MessageTypeId: ocpp.CALL,
+				UniqueId:      uuid.NewString(),
+				Action:        tt.action,
+				Payload:       tt.payload,
+			})
+			s.Require().NoError(err)
+
+			if !tt.expectOCMF {
+				s.Emptyf(result.Errors(), "expected no validation errors but got %v", result.Errors())
+				return
+			}
+
+			s.NotEmpty(result.Errors())
+			found := false
+			for _, e := range result.Errors() {
+				if strings.Contains(e, tt.wantErrText) {
+					found = true
+					break
+				}
+			}
+			s.Truef(found, "expected an error containing %q, got %v", tt.wantErrText, result.Errors())
 		})
 	}
 }

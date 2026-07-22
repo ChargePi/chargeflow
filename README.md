@@ -1,7 +1,7 @@
 # ChargeFlow
 
-A CLI tool for analyzing your raw OCPP JSON messages. Useful for debugging and compatibility checks
-with various Charge Point Management Systems or Charge Point implementations.
+A CLI tool for analyzing your raw OCPP JSON messages. Useful for debugging and compatibility checks with various Charge
+Point Management Systems or Charge Point implementations.
 
 ## Features
 
@@ -9,26 +9,27 @@ with various Charge Point Management Systems or Charge Point implementations.
 - [x] Generate human-readable reports
 - [x] Support for remote schema registries using Kafka-compatible Schemas Registry APIs
 - [x] Bring your own OCPP schemas for vendor-specific extensions
+- [x] Validating OCMF-compatible meter values
 
 ## Compatibility matrix
 
 |          OCPP specification | Supported |   
 |----------------------------:|:---------:|
-|                    OCPP 1.6 |     ✅     |
-| OCPP 1.6 Security Extension |     ✅     |
-|                  OCPP 2.0.1 |     ✅     |
-|                    OCPP 2.1 |     ✅     |
+|                    OCPP 1.6 |    ✅     |
+| OCPP 1.6 Security Extension |    ✅     |
+|                  OCPP 2.0.1 |    ✅     |
+|                    OCPP 2.1 |    ✅     |
 
 ### Roadmap
 
-- [ ] Support for signed messages
 - [ ] Compatibility checks
 
 ## Installation
 
 ### Binary
 
-Download the latest release for your platform from the [releases page](https://github.com/chargepi/chargeflow/releases/latest).
+Download the latest release for your platform from
+the [releases page](https://github.com/chargepi/chargeflow/releases/latest).
 
 **Linux / macOS**
 
